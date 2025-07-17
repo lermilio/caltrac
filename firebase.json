@@ -1,1 +1,35 @@
-{"flutter":{"platforms":{"ios":{"default":{"projectId":"caltrac-cd1a5","appId":"1:669052931362:ios:656a76d8ec1ee7af4e697b","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"caltrac-cd1a5","configurations":{"ios":"1:669052931362:ios:656a76d8ec1ee7af4e697b"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "ios": {
+        "default": {
+          "projectId": "caltrac-cd1a5",
+          "appId": "1:669052931362:ios:656a76d8ec1ee7af4e697b",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "caltrac-cd1a5",
+          "configurations": {
+            "ios": "1:669052931362:ios:656a76d8ec1ee7af4e697b"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ]
+}

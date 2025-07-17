@@ -1,8 +1,11 @@
 import 'package:caltrac/services/calorie_log_parser.dart';
+import 'package:caltrac/services/firebase_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:caltrac/widgets/remove_entry_widget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+//import 'package:caltrac/services/firebase_functions.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 
 class LogScreen extends StatefulWidget{
@@ -121,7 +124,19 @@ String _userLog = '';
               ),
             ),
             FloatingActionButton.extended(
-              onPressed: () { _submitInput(); },
+              onPressed: () async {
+                await logEntryToFirebase(
+                  userId: 'e2aPNbtabDSQZVcoRyCIS549reh2',
+                  date: DateTime.now(),
+                  entryData: {
+                    'name': 'Grilled Chicken',
+                    'calories': 375,
+                    'protein': 34,
+                    'fat': 9,
+                    'carbs': 0,
+                  },
+                );
+              },
               backgroundColor: Colors.blue[300],
               label: Text(
                 '          Add          ',
