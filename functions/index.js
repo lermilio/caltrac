@@ -4,26 +4,25 @@ admin.initializeApp();
 
 const db = admin.firestore();
 
-exports.addEntryLog = functions.https.onCall(async (data, context) => {
-  console.log("ADD ENTRY FUNCTION HIT");
+exports.addEntryLog = functions.https.onCall(async (data, context) => { // Define the func to add an entry log
 
   const userId = data.userId || data?.data?.userId;
-  const dateString = data.dateString || data?.data?.dateString;
+  const dateString = data.dateString || data?.data?.dateString;         // Extract userId and dateString from data
   const entryData = data.entryData || data?.data?.entryData;
 
   console.log("Data received:", { userId, dateString, entryData });
 
   if (!userId || !entryData || !dateString) {
-    throw new functions.https.HttpsError("invalid-argument", "Missing required fields");
+    throw new functions.https.HttpsError("invalid-argument", "Missing required fields");  // Validate input data
   }
 
-  const docRef = admin.firestore()
+  const docRef = admin.firestore()                 // Create a reference to the document
     .collection("users")
     .doc(userId)
     .collection("dailyLogs")
     .doc(dateString);
 
-  await admin.firestore().runTransaction(async (transaction) => {
+  await admin.firestore().runTransaction(async (transaction) => {   // Updating the document in a transaction
     const doc = await transaction.get(docRef);
 
     if (doc.exists) {

@@ -16,43 +16,55 @@ class LogScreen extends StatefulWidget{
 }
 
 class _LogScreenState extends State<LogScreen> {
-final TextEditingController _controllerLog = TextEditingController();
-final TextEditingController _controllerDate = TextEditingController();
-String _userDate = '';
-String _userLog = '';
+
+  final TextEditingController _controllerLog = TextEditingController();
+  final TextEditingController _dateController = TextEditingController(
+    text: DateTime.now().toIso8601String().split('T').first, 
+  );
 
   void _submitInput() async {
     final rawInput = _controllerLog.text;
-    final date = _controllerDate.text;
+    final dateString = _dateController.text.trim();
+    final parsedDate = dateString.isNotEmpty
+        ? DateTime.tryParse(dateString)
+        : DateTime.now();
 
-    final currentUserUid = FirebaseAuth.instance.currentUser?.uid;
+    final currentUserUid = 'e2aPNbtabDSQZVcoRyCIS549reh2'; // Update if app has other users
 
     if (currentUserUid == null) {
       print('User not signed in!');
       return;
     }
 
+    if (parsedDate == null) {
+      print('Invalid date format');
+      return;
+    }
+
     try {
       final parsedData = await extractNutrition(rawInput);
+      print('Parsed Data from AI: $parsedData');
 
-      await FirebaseFirestore.instance
-        .collection('users')
-        .doc(currentUserUid) // Replace with your auth UID
-        .collection('Logs')
-        .add({
-          'input': rawInput,
-          'date': date,
-          ...parsedData,
-        });
+      final entryData = {
+        'input': rawInput,
+        ...parsedData,
+      };
+
+      await logEntryToFirebase(
+        userId: currentUserUid,
+        date: parsedDate,
+        entryData: entryData,
+      );
 
       setState(() {
-        _userLog = rawInput;
-        _userDate = date;
+        _controllerLog.clear();
+        _dateController.text = DateTime.now().toIso8601String().split('T').first;
       });
+
     } catch (e) {
-      print('AI Parsing or Firebase Error: $e');
+      print('Error logging entry: $e');
     }
-}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -113,9 +125,9 @@ String _userLog = '';
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
               child: TextField(
-                controller: _controllerDate,
+                controller: _dateController,
                 decoration: InputDecoration(
-                  labelText: 'e.g "04/27/2005"',
+                  labelText: 'E.g. "2025-07-18"',
                   border: OutlineInputBorder(),
                   labelStyle: TextStyle(
                     fontSize: 10
@@ -124,19 +136,7 @@ String _userLog = '';
               ),
             ),
             FloatingActionButton.extended(
-              onPressed: () async {
-                await logEntryToFirebase(
-                  userId: 'e2aPNbtabDSQZVcoRyCIS549reh2',
-                  date: DateTime.now(),
-                  entryData: {
-                    'name': 'Grilled Chicken',
-                    'calories': 375,
-                    'protein': 34,
-                    'fat': 9,
-                    'carbs': 0,
-                  },
-                );
-              },
+              onPressed: _submitInput,
               backgroundColor: Colors.blue[300],
               label: Text(
                 '          Add          ',

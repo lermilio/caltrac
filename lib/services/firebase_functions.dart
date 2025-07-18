@@ -15,8 +15,8 @@ Future<void> logEntryToFirebase({
       'dateString': dateStr,
       'entryData': entryData,
     });
-    print('✅ Entry logged!');
+    print('Entry logged!');
   } catch (e) {
-    print('❌ Error: $e');
+    print('Error: $e');
   }
 }
