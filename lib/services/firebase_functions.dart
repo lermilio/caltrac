@@ -20,3 +20,19 @@ Future<void> logEntryToFirebase({
     print('Error: $e');
   }
 }
+
+Future<void> logWeightToFirebase({
+  required String userId,
+  required DateTime date,
+  required double weight,
+}) async {
+  final String dateStr = "${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+
+  final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('addWeightLog');
+
+  await callable.call({
+    'userId': userId,
+    'dateString': dateStr,
+    'weight': weight,
+  });
+}

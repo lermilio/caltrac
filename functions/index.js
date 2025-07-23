@@ -51,3 +51,39 @@ exports.addEntryLog = functions.https.onCall(async (data, context) => { // Defin
 
   return { success: true };
 });
+
+exports.addWeightLog = functions.https.onCall(async (data, context) => { // Define the func to add a weight log
+
+  const userId = data.userId || data?.data?.userId;
+  const dateString = data.dateString || data?.data?.dateString;
+  const weight = data.weight || data?.data?.weight;
+
+  console.log("Data received:", { userId, dateString, weight });
+
+  if (!userId || !dateString || !weight) {
+    throw new functions.https.HttpsError("invalid-argument", "Missing required fields");  // Validate input data
+  }
+
+  const docRef = admin.firestore()                 // Create a reference to the document
+    .collection("users")
+    .doc(userId)
+    .collection("weightLogs")
+    .doc(dateString);
+
+  await admin.firestore().runTransaction(async (transaction) => {   // Updating the document in a transaction
+    const doc = await transaction.get(docRef);
+    if (doc.exists) {
+      // Reject if a weight log for this date already exists
+      throw new functions.https.HttpsError(
+        "already-exists",
+        `A weight entry already exists for ${dateString}`
+      );
+    }
+
+    // Otherwise, create the weight log
+    transaction.set(docRef, {
+      date: admin.firestore.Timestamp.fromDate(new Date(dateString)),
+      weight: parseFloat(weight),
+    });
+  });
+});

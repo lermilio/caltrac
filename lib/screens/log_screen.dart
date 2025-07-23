@@ -2,10 +2,7 @@ import 'package:caltrac/services/calorie_log_parser.dart';
 import 'package:caltrac/services/firebase_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:caltrac/widgets/view_entries_widget.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-//import 'package:caltrac/services/firebase_functions.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+
 
 
 class LogScreen extends StatefulWidget{
@@ -25,20 +22,23 @@ class _LogScreenState extends State<LogScreen> {
   void _submitInput() async {
     final rawInput = _controllerLog.text;
     final dateString = _dateController.text.trim();
-    final parsedDate = dateString.isNotEmpty
-        ? DateTime.tryParse(dateString)
-        : DateTime.now();
-
     final currentUserUid = 'e2aPNbtabDSQZVcoRyCIS549reh2'; // Update if app has other users
 
-    if (currentUserUid == null) {
-      print('User not signed in!');
+    if (rawInput.isEmpty || dateString.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in both fields')),
+      );
       return;
     }
 
+    final parsedDate = dateString.isNotEmpty
+        ? DateTime.tryParse(dateString)
+        : DateTime.now();
     if (parsedDate == null) {
-      print('Invalid date format');
-      return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid date format')),
+      );
+      return; 
     }
 
     try {
@@ -55,10 +55,9 @@ class _LogScreenState extends State<LogScreen> {
         entryData: entryData,
         date: parsedDate,
       );
-      
-      if(!confirmed) {
-        print('User cancelled the entry submission');
-        return;
+
+      if (!confirmed) {
+        return; // User cancelled the dialog
       }
 
       await logEntryToFirebase(
@@ -71,9 +70,12 @@ class _LogScreenState extends State<LogScreen> {
         _controllerLog.clear();
         _dateController.text = DateTime.now().toIso8601String().split('T').first;
       });
-
-    } catch (e) {
-      print('Error logging entry: $e');
+    } 
+    catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+        return;
     }
   }
 
@@ -125,7 +127,7 @@ class _LogScreenState extends State<LogScreen> {
             );
           },
         )) ??
-        false; // default to false on null
+        false;
   }
 
   @override
