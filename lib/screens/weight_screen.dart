@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:caltrac/widgets/remove_entry_widget.dart';
+import 'package:caltrac/widgets/view_entries_widget.dart';
 
 class WeightScreen extends StatefulWidget{
   const WeightScreen({super.key});
@@ -36,7 +36,7 @@ final TextEditingController _controllerDate = TextEditingController();
                   showModalBottomSheet(
                     context: context,
                     isScrollControlled: true,
-                    builder: (context) => RemoveEntryWidget(),
+                    builder: (context) => ViewEntriesWidget(),
                   );
                 },
                 child: Text(
