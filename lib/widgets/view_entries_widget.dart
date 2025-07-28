@@ -83,27 +83,27 @@ class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
 }
 
   void _confirmDeleteMeal(Map<String, dynamic> meal) {
-  showDialog(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: const Text('Delete Entry?'),
-      content: Text('Are you sure you want to delete "${meal['input']}"?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () {
-            Navigator.of(context).pop(); // close dialog
-            _deleteMealFromFirebase(meal);
-          },
-          child: const Text('Delete', style: TextStyle(color: Colors.red)),
-        ),
-      ],
-    ),
-  );
-}
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Entry?'),
+        content: Text('Are you sure you want to delete "${meal['input']}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // close dialog
+              _deleteMealFromFirebase(meal);
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
 
   CalendarFormat _calendarFormat = CalendarFormat.week;
 

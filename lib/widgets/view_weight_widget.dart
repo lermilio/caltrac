@@ -20,6 +20,47 @@ class _ViewWeightWidgetState extends State<ViewWeightWidget> {
     _fetchWeightLogs();
   }
 
+  Future<void> _deleteWeightLogFromFirebase(int index) async {
+    final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2'; // Replace with current user's UID if needed
+    final docId = _weightLogs[index]['id'];
+
+    final docRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('weightLogs')
+        .doc(docId);
+
+    await docRef.delete();
+
+    setState(() {
+      _weightLogs.removeAt(index);
+    });
+  }
+
+  void _confirmDeleteMeal(int index) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Entry?'),
+        content: Text('Are you sure you want to delete weight from "${_weightLogs[index]['id']}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // close dialog
+              _deleteWeightLogFromFirebase(index);
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+
   Future<void> _fetchWeightLogs() async {
     final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2'; // Update if needed
     final docRef = await FirebaseFirestore.instance
@@ -31,7 +72,10 @@ class _ViewWeightWidgetState extends State<ViewWeightWidget> {
 
     setState(() {
       _weightLogs = docRef.docs
-          .map((doc) => doc.data() as Map<String, dynamic>)
+          .map((doc) => {
+                ...doc.data(),
+                'id': doc.id,
+              })
           .toList();
     });
   }
@@ -61,11 +105,23 @@ class _ViewWeightWidgetState extends State<ViewWeightWidget> {
                         fontSize: 20,
                       )
                     ),
-                    trailing: Text(
-                      formattedDate,
-                      style: const TextStyle(
-                        fontSize: 20,
-                      )
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          formattedDate,
+                          style: const TextStyle(
+                            fontSize: 20,
+                          )
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () {
+                            _confirmDeleteMeal(index); 
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 );
