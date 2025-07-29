@@ -15,7 +15,7 @@ class DailyProgressScreen extends StatefulWidget{
 
 class _DailyProgressScreenState extends State<DailyProgressScreen> {
 
-  int netCalories(Map<String, dynamic> data) => data['calories'] - data['burned'];  
+  int netCalories(Map<String, dynamic> data) => data['calories_in'] - data['calories_out'];  
   late DateTime _currentDate;
   final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2';
   Future<Map<String, dynamic>>? _summaryFuture;
@@ -23,12 +23,14 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
   void goToNextDay() {
     setState(() {
       _currentDate = _currentDate.add(Duration(days: 1));
+      _summaryFuture = fetchDailySummary(uid, _currentDate);
     });
   }
 
   void goToPreviousDay() {
     setState(() {
       _currentDate = _currentDate.subtract(Duration(days: 1));
+      _summaryFuture = fetchDailySummary(uid, _currentDate);
     });
   }
 

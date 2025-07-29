@@ -31,7 +31,7 @@ class _CalTracAppState extends State<CalTracApp> {
 
   final List<Widget> _screens = [
     DailyProgressScreen(),
-    WeeklyProgressScreen(calsIn: 10000, calsOut: 0, protein: 1000, fats: 55, carbs: 69),
+    WeeklyProgressScreen(),
     MonthlyProgressScreen(calsIn: 40000, calsOut: 0, protein: 10000, fats: 55, carbs: 69),
     LogScreen(),
     WeightScreen()

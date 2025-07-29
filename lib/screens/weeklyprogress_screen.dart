@@ -1,23 +1,13 @@
 import 'package:caltrac/date_manager.dart';
 import 'package:caltrac/widgets/progress_widget.dart';
 import 'package:flutter/material.dart';
-
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class WeeklyProgressScreen extends StatefulWidget{
 
-  final int calsIn;
-  final int calsOut;
-  final int protein;
-  final int fats;
-  final int carbs;
-
   const WeeklyProgressScreen({
     super.key, 
-    required this.calsIn,
-    required this.calsOut,
-    required this.protein,
-    required this.fats,
-    required this.carbs,
   });
 
   @override
@@ -26,12 +16,58 @@ class WeeklyProgressScreen extends StatefulWidget{
 
 class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
 
-  int get netCals => widget.calsIn + widget.calsOut;
-  double get avgProtein => widget.protein / 7;
-  double get avgCarbs => widget.carbs / 7;
-  double get avgFats => widget.fats / 7;
+  int weeklyNetCalories(Map<String, dynamic> data) => data['calories_in'] - data['calories_out'];  
+  int avgDailyProtein(Map<String, dynamic> data) => ((data['protein'] ?? 0) / 7).round();    
+  int avgDailyCarbs(Map<String, dynamic> data) => ((data['carbs'] ?? 0) / 7).round();  
+  int avgDailyFats(Map<String, dynamic> data) => ((data['fat'] ?? 0) / 7).round();  
+
   late TimeRange _range;
   late List<DateTime> _daysInWeek;
+
+  final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2';
+  Future<Map<String, dynamic>>? _weeklySummaryFuture;
+
+  Future<Map<String, dynamic>> fetchWeeklySummary(String userId, TimeRange dateRange) async {
+    final FirebaseFirestore firestore = FirebaseFirestore.instance;
+    int weeklyCalsIn = 0;
+    int weeklyCalsOut = 0;
+    int weeklyFats = 0;
+    int weeklyProtein = 0;
+    int weeklyCarbs = 0;
+
+    for (int i = 0; i < 7; i++){
+      final DateTime date = dateRange.start.add(Duration(days: i));
+
+      final doc = firestore
+        .collection('users')
+        .doc(userId)
+        .collection('dailyLogs')
+        .doc(DateFormat('yyyy-MM-dd').format(date));
+
+      final docSnap = await doc.get();
+
+      if (!docSnap.exists) {
+        continue;
+      }
+
+      final data = docSnap.data();
+      if (data != null) {
+        weeklyCalsIn += (data['calories_in'] ?? 0) as int;
+        weeklyCarbs += (data['carbs'] ?? 0) as int;
+        weeklyFats += (data['fat'] ?? 0) as int;
+        weeklyProtein += (data['protein'] ?? 0) as int;
+        weeklyCalsOut += (data['calories_out'] ?? 0) as int;
+      }
+    }
+
+    return {
+      'calories_in': weeklyCalsIn,
+      'calories_out': weeklyCalsOut,
+      'protein': weeklyProtein,
+      'carbs': weeklyCarbs,
+      'fat': weeklyFats,
+    };
+  }
 
   @override
   void initState() {
@@ -39,7 +75,9 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
     _daysInWeek = List.generate(7, (i) => _range.start.add(Duration(days: i)))
         .where((day) => !day.isAfter(DateTime.now()))
         .toList();
+    _weeklySummaryFuture = fetchWeeklySummary(uid, _range);
   }
+
 
   void goToNextWeek() {
     setState(() {
@@ -47,6 +85,7 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
       _daysInWeek = List.generate(7, (i) => _range.start.add(Duration(days: i)))
           .where((day) => !day.isAfter(DateTime.now()))
           .toList();
+      _weeklySummaryFuture = fetchWeeklySummary(uid, _range);
     });
   }
 
@@ -56,6 +95,7 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
       _daysInWeek = List.generate(7, (i) => _range.start.add(Duration(days: i)))
           .where((day) => !day.isAfter(DateTime.now()))
           .toList();
+      _weeklySummaryFuture = fetchWeeklySummary(uid, _range);
     });
   }
 
@@ -97,11 +137,29 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
                   ),
                 ],
               ),
-              SizedBox(height: 24),
-              ProgressWidget(title: 'Week Caloric Net', data: netCals, unit: 'kcal'),
-              ProgressWidget(title: 'Average Daily Protein', data: avgProtein.toInt(), unit: 'g'),
-              ProgressWidget(title: 'Average Daily Carbs', data: avgCarbs.toInt(), unit: 'g'),
-              ProgressWidget(title: 'Average Daily Fats', data: avgFats.toInt(), unit: 'g'),
+              FutureBuilder<Map<String, dynamic>>(
+                future: _weeklySummaryFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const CircularProgressIndicator();
+                  }
+
+                  if (snapshot.hasError) {
+                    return Text('Error: ${snapshot.error}');
+                  }
+
+                  final data = snapshot.data!;
+
+                  return Column(
+                    children: [
+                      ProgressWidget(title: 'Week Caloric Net', data: weeklyNetCalories(data), unit: 'kcal'),
+                      ProgressWidget(title: 'Average Daily Protien', data: avgDailyProtein(data), unit: 'kcal'),
+                      ProgressWidget(title: 'Average Daily Carbs', data: avgDailyCarbs(data), unit: 'kcal'),
+                      ProgressWidget(title: 'Average Daily Fats', data: avgDailyFats(data), unit: 'g'),
+                    ],
+                  );
+                },
+              ),
             ],
           ),
         ),
