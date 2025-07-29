@@ -6,13 +6,17 @@ class MonthlyProgressScreen extends StatefulWidget{
 
   final int calsIn;
   final int calsOut;
-  final int protien;
+  final int protein;
+  final int fats;
+  final int carbs;
 
   const MonthlyProgressScreen({
     super.key, 
     required this.calsIn,
     required this.calsOut,
-    required this.protien,
+    required this.protein,
+    required this.fats,
+    required this.carbs,
   });
 
   @override
@@ -22,7 +26,7 @@ class MonthlyProgressScreen extends StatefulWidget{
 class _MonthlyProgressScreenState extends State<MonthlyProgressScreen> {
 
   int get netCals => widget.calsIn + widget.calsOut;
-  double get avgProtien => widget.protien / 30;
+
   late TimeRange _range;
   late List<DateTime> _daysInMonth;
 
@@ -39,6 +43,10 @@ class _MonthlyProgressScreenState extends State<MonthlyProgressScreen> {
       (i) => _range.start.add(Duration(days: i)),
     ).where((day) => !day.isAfter(DateTime.now())).toList();
   }
+
+  double get avgProtein => widget.protein / _daysInMonth.length; // Make sure this is correct
+  double get avgCarbs => widget.carbs / _daysInMonth.length;
+  double get avgFats => widget.fats / _daysInMonth.length;
 
   void goToNextMonth() {
     setState(() {
@@ -94,7 +102,10 @@ class _MonthlyProgressScreenState extends State<MonthlyProgressScreen> {
               ),
               SizedBox(height: 24),
               ProgressWidget(title: 'Monthly Caloric Net', data: netCals, unit: 'kcal'),
-              ProgressWidget(title: 'Average Daily Protien', data: avgProtien.toInt(), unit: 'g'),
+              ProgressWidget(title: 'Average Daily Protein', data: avgProtein.toInt(), unit: 'g'),
+              ProgressWidget(title: 'Average Daily Carbs', data: avgCarbs.toInt(), unit: 'g'),
+              ProgressWidget(title: 'Average Daily Fats', data: avgFats.toInt(), unit: 'g'),
+
             ],
           ),
         ),

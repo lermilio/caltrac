@@ -30,9 +30,9 @@ class _CalTracAppState extends State<CalTracApp> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
-    DailyProgressScreen(calsIn: 450, calsOut: 1300, protien: 120),
-    WeeklyProgressScreen(calsIn: 10000, calsOut: 13000, protien: 1000),
-    MonthlyProgressScreen(calsIn: 40000, calsOut: 70000, protien: 10000),
+    DailyProgressScreen(),
+    WeeklyProgressScreen(calsIn: 10000, calsOut: 0, protein: 1000, fats: 55, carbs: 69),
+    MonthlyProgressScreen(calsIn: 40000, calsOut: 0, protein: 10000, fats: 55, carbs: 69),
     LogScreen(),
     WeightScreen()
   ];

@@ -7,13 +7,17 @@ class WeeklyProgressScreen extends StatefulWidget{
 
   final int calsIn;
   final int calsOut;
-  final int protien;
+  final int protein;
+  final int fats;
+  final int carbs;
 
   const WeeklyProgressScreen({
     super.key, 
     required this.calsIn,
     required this.calsOut,
-    required this.protien,
+    required this.protein,
+    required this.fats,
+    required this.carbs,
   });
 
   @override
@@ -23,7 +27,9 @@ class WeeklyProgressScreen extends StatefulWidget{
 class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
 
   int get netCals => widget.calsIn + widget.calsOut;
-  double get avgProtien => widget.protien / 7;
+  double get avgProtein => widget.protein / 7;
+  double get avgCarbs => widget.carbs / 7;
+  double get avgFats => widget.fats / 7;
   late TimeRange _range;
   late List<DateTime> _daysInWeek;
 
@@ -93,7 +99,9 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
               ),
               SizedBox(height: 24),
               ProgressWidget(title: 'Week Caloric Net', data: netCals, unit: 'kcal'),
-              ProgressWidget(title: 'Average Daily Protien', data: avgProtien.toInt(), unit: 'g'),
+              ProgressWidget(title: 'Average Daily Protein', data: avgProtein.toInt(), unit: 'g'),
+              ProgressWidget(title: 'Average Daily Carbs', data: avgCarbs.toInt(), unit: 'g'),
+              ProgressWidget(title: 'Average Daily Fats', data: avgFats.toInt(), unit: 'g'),
             ],
           ),
         ),

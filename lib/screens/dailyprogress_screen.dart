@@ -1,18 +1,12 @@
 import 'package:caltrac/widgets/progress_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class DailyProgressScreen extends StatefulWidget{ 
 
-  final int calsIn;
-  final int calsOut;
-  final int protien;
-
   const DailyProgressScreen({
     super.key, 
-    required this.calsIn,
-    required this.calsOut,
-    required this.protien,
   });
 
   @override
@@ -21,14 +15,10 @@ class DailyProgressScreen extends StatefulWidget{
 
 class _DailyProgressScreenState extends State<DailyProgressScreen> {
 
-  int get netCals => widget.calsIn + widget.calsOut;
+  int netCalories(Map<String, dynamic> data) => data['calories'] - data['burned'];  
   late DateTime _currentDate;
-
-  @override
-  void initState() {
-    super.initState();
-    _currentDate = DateTime.now();
-  }
+  final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2';
+  Future<Map<String, dynamic>>? _summaryFuture;
 
   void goToNextDay() {
     setState(() {
@@ -43,7 +33,45 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
   }
 
   String get formattedDate {
-    return DateFormat('MMM d').format(_currentDate); // e.g., "Jun 30"
+    return DateFormat('MMM d').format(_currentDate);
+  }
+
+   @override
+  void initState() {
+    super.initState();
+    _currentDate = DateTime.now();
+    _summaryFuture = fetchDailySummary(uid, _currentDate);
+  }
+
+  Future<Map<String, dynamic>> fetchDailySummary(String userId, DateTime date) async {
+    final FirebaseFirestore firestore = FirebaseFirestore.instance;
+
+    final doc = await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('dailyLogs')
+      .doc(DateFormat('yyyy-MM-dd').format(date))
+      .get();
+
+    if (!doc.exists) {
+      return {
+        'calories_in': 0,
+        'calories_out': 0,
+        'protein': 0,
+        'carbs': 0,
+        'fat': 0,
+      };
+    }
+
+    final data = doc.data()!;
+
+    return {
+      'calories_in': data['calories_in'] ?? 0,
+      'calories_out': data['calories_out'] ?? 0,
+      'protein': data['protein'] ?? 0,
+      'carbs': data['carbs'] ?? 0,
+      'fat': data['fat'] ?? 0,
+    };
   }
 
   @override
@@ -85,14 +113,36 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
                 ],
               ),
               SizedBox(height: 24),
-              ProgressWidget(title: 'Calories In', data: widget.calsIn, unit: 'kcal'),
-              ProgressWidget(title: 'Calories Out', data: widget.calsOut, unit: 'kcal'),
-              ProgressWidget(title: 'Protien Total', data: widget.protien, unit: 'g'),
-              ProgressWidget(title: 'Net Calories', data: netCals, unit: 'kcal'),
+              FutureBuilder<Map<String, dynamic>>(
+                future: _summaryFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const CircularProgressIndicator();
+                  }
+
+                  if (snapshot.hasError) {
+                    return Text('Error: ${snapshot.error}');
+                  }
+
+                  final data = snapshot.data!;
+                  final netCals = (data['calories_in'] ?? 0) - (data['calories_out'] ?? 0);
+
+                  return Column(
+                    children: [
+                      ProgressWidget(title: 'Calories In', data: data['calories_in'] ?? 0, unit: 'kcal'),
+                      ProgressWidget(title: 'Calories Out', data: data['calories_out'] ?? 0, unit: 'kcal'),
+                      ProgressWidget(title: 'Net Calories', data: netCals, unit: 'kcal'),
+                      ProgressWidget(title: 'Protein', data: data['protein'] ?? 0, unit: 'g'),
+                      ProgressWidget(title: 'Carbs', data: data['carbs'] ?? 0, unit: 'g'),
+                      ProgressWidget(title: 'Fats', data: data['fat'] ?? 0, unit: 'g'),
+                    ],
+                  );
+                },
+              ),
             ],
           ),
         ),
-      ),
+      )
     );
   }
 }
