@@ -43,8 +43,9 @@ exports.addEntryLog = functions.https.onCall(async (data, context) => { // Defin
         protein: entryData.protein || 0,
         carbs: entryData.carbs || 0,
         fat: entryData.fat || 0,
-        alcohol: 0,
         meals: [entryData],
+        whoop_cals: 0,
+        extra_cals: 0,
       });
     }
   });

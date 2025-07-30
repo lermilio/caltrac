@@ -118,17 +118,6 @@ class _WeightScreenState extends State<WeightScreen> {
             ),
           ),
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 30, vertical: 10),
-            child: Text(
-              'Enter Date',
-              textAlign: TextAlign.left,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          Padding(
             padding: const EdgeInsets.symmetric(horizontal: 30),
             child: TextField(
               controller: _controllerDate,

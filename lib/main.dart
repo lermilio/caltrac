@@ -3,7 +3,6 @@ import 'package:caltrac/screens/dailyprogress_screen.dart';
 import 'package:caltrac/screens/weeklyprogress_screen.dart';
 import 'package:caltrac/screens/monthlyprogress_screen.dart';
 import 'package:caltrac/screens/log_screen.dart';
-import 'package:caltrac/bars/bottom_bar.dart';
 import 'package:caltrac/screens/weight_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -34,7 +33,7 @@ class _CalTracAppState extends State<CalTracApp> {
     WeeklyProgressScreen(),
     MonthlyProgressScreen(),
     LogScreen(),
-    WeightScreen()
+    WeightScreen(),
   ];
 
   final List<String> _titles = [
@@ -79,7 +78,7 @@ Widget build(BuildContext context) {
           BottomNavigationBarItem(icon: Icon(Icons.today), label: 'Daily'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_view_week), label: 'Weekly'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Monthly'),
-          BottomNavigationBarItem(icon: Icon(Icons.list), label: 'Log'),
+          BottomNavigationBarItem(icon: Icon(Icons.add), label: 'Add'),
           BottomNavigationBarItem(icon: Icon(Icons.monitor_weight), label: 'Weight'),
         ],
       ),

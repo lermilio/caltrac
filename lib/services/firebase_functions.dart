@@ -1,4 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 
 Future<void> logEntryToFirebase({
   required String userId,
@@ -21,6 +23,48 @@ Future<void> logEntryToFirebase({
   }
 }
 
+Future<void> logCalsOutToFirebase({
+  required String userId,
+  required DateTime date,
+  required int extraCals,
+}) async {
+  final dateKey = date.toIso8601String().split('T').first;
+  final docRef = FirebaseFirestore.instance
+      .collection('users')
+      .doc(userId)
+      .collection('dailyLogs')
+      .doc(dateKey);
+
+  final snapshot = await docRef.get();
+
+  // If the document doesn't exist, initialize it
+  if (!snapshot.exists) {
+    await docRef.set({
+      'whoop_cals': 0,
+      'extra_cals': extraCals.toInt(),
+      'calories_out': extraCals.toInt(),
+      'calories_in': 0,
+      'net_calories' : 0,
+      'protein': 0,
+      'carbs' : 0,
+      'fat' : 0,
+      'meals': [],
+      'date' : date,
+    });
+    return;
+  }
+
+  final existing = snapshot.data() ?? {};
+  final int whoopCalories = existing['whoop_cals'] ?? 0;
+  final int extraCalories = extraCals.toInt();
+  final int totalCaloriesOut = whoopCalories + extraCalories;
+
+  await docRef.set({
+    'extra_cals': extraCalories,
+    'calories_out': totalCaloriesOut,
+  }, SetOptions(merge: true));
+}
+
 Future<void> logWeightToFirebase({
   required String userId,
   required DateTime date,
@@ -36,3 +80,4 @@ Future<void> logWeightToFirebase({
     'weight': weight,
   });
 }
+
