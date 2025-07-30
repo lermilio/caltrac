@@ -49,7 +49,7 @@ Future<void> logCalsOutToFirebase({
       'carbs' : 0,
       'fat' : 0,
       'meals': [],
-      'date' : date,
+      'date' : dateKey,
     });
     return;
   }
