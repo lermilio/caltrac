@@ -2,6 +2,9 @@ import 'package:caltrac/widgets/progress_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+
+
 
 class DailyProgressScreen extends StatefulWidget{ 
 
@@ -38,11 +41,32 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
     return DateFormat('MMM d').format(_currentDate);
   }
 
+  Future<void> updateWhoopCals() async {
+    final String date = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final String userId = 'e2aPNbtabDSQZVcoRyCIS549reh2';
+
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('fetchCaloriesBurned')
+          .call({
+        'date': date,
+        'userId': userId,
+      });
+
+      print("WHOOP cals updated: ${result.data['whoop_cals']}");
+    } catch (e) {
+      print("Error fetching WHOOP cals: $e");
+    }
+  }
+
    @override
   void initState() {
     super.initState();
     _currentDate = DateTime.now();
-    _summaryFuture = fetchDailySummary(uid, _currentDate);
+    updateWhoopCals().then((_) {
+      _summaryFuture = fetchDailySummary(uid, _currentDate);
+      setState(() {}); 
+    });
   }
 
   Future<Map<String, dynamic>> fetchDailySummary(String userId, DateTime date) async {

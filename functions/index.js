@@ -88,3 +88,51 @@ exports.addWeightLog = functions.https.onCall(async (data, context) => { // Defi
     });
   });
 });
+
+const fetch = require("node-fetch");
+
+// Secure: pulls token from Firebase env config (set it with CLI)
+const WHOOP_ACCESS_TOKEN = process.env.WHOOP_ACCESS_TOKEN;
+
+exports.fetchCaloriesBurned = functions.https.onCall(async (data, context) => {
+  try {
+    console.log("🔥 fetchCaloriesBurned called", date, userId);
+    const { date, userId } = data;
+
+    const start = `${date}T00:00:00.000Z`;
+    const end = `${date}T23:59:59.999Z`;
+
+    const url = `https://api.prod.whoop.com/users/me/activities?start=${start}&end=${end}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${WHOOP_ACCESS_TOKEN}`,
+      },
+    });
+
+    const json = await response.json();
+
+    let totalCalories = 0;
+    if (Array.isArray(json)) {
+      json.forEach((activity) => {
+        totalCalories += activity.score_calories || 0;
+      });
+    }
+
+    // 🔥 Write to /users/{userId}/dailyLogs/{date}/whoop_cals
+    const docRef = db
+      .collection("users")
+      .doc(userId)
+      .collection("dailyLogs")
+      .doc(date);
+
+    await docRef.set({ whoop_cals: totalCalories }, { merge: true });
+
+    return { success: true, whoop_cals: totalCalories };
+  } catch (error) {
+    console.error("WHOOP fetch error:", error);
+    return { success: false, error: error.message };
+  }
+});
+
