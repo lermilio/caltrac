@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 
 
@@ -41,28 +42,36 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
     return DateFormat('MMM d').format(_currentDate);
   }
 
+  
   Future<void> updateWhoopCals() async {
-    final String date = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final String userId = 'e2aPNbtabDSQZVcoRyCIS549reh2';
+    final now = DateTime.now(); // ✅ get this directly
+    final date = DateFormat('yyyy-MM-dd').format(now); // ✅ correct format
+
+    final userId = 'e2aPNbtabDSQZVcoRyCIS549reh2';
+
+    print("🧠 Sending WHOOP request with:");
+    print(" - date: $date");
+    print(" - userId: $userId");
 
     try {
       final result = await FirebaseFunctions.instance
-          .httpsCallable('fetchCaloriesBurned')
+          .httpsCallable('fetchWhoopCalories')
           .call({
-        'date': date,
-        'userId': userId,
-      });
+            'date': date,
+            'userId': userId,
+          });
 
-      print("WHOOP cals updated: ${result.data['whoop_cals']}");
+      print("🔥 WHOOP cals updated: ${result.data['whoop_cals']}");
     } catch (e) {
-      print("Error fetching WHOOP cals: $e");
+      print("💥 Error fetching WHOOP cals: $e");
     }
   }
 
+
    @override
   void initState() {
-    super.initState();
     _currentDate = DateTime.now();
+    super.initState();
     updateWhoopCals().then((_) {
       _summaryFuture = fetchDailySummary(uid, _currentDate);
       setState(() {}); 
@@ -148,6 +157,10 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
 
                   if (snapshot.hasError) {
                     return Text('Error: ${snapshot.error}');
+                  }
+
+                  if (!snapshot.hasData || snapshot.data == null) {
+                    return Text('No data found'); // or a placeholder widget
                   }
 
                   final data = snapshot.data!;

@@ -92,12 +92,12 @@ exports.addWeightLog = functions.https.onCall(async (data, context) => { // Defi
 const fetch = require("node-fetch");
 
 // Secure: pulls token from Firebase env config (set it with CLI)
-const WHOOP_ACCESS_TOKEN = process.env.WHOOP_ACCESS_TOKEN;
+const WHOOP_ACCESS_TOKEN = functions.config().whoop.token;
 
-exports.fetchCaloriesBurned = functions.https.onCall(async (data, context) => {
+exports.fetchWhoopCalories = functions.https.onCall(async (data, context) => {
   try {
-    console.log("🔥 fetchCaloriesBurned called", date, userId);
     const { date, userId } = data;
+    console.log("🔥 fetchWhoopCalories called", date, userId);
 
     const start = `${date}T00:00:00.000Z`;
     const end = `${date}T23:59:59.999Z`;
@@ -120,7 +120,7 @@ exports.fetchCaloriesBurned = functions.https.onCall(async (data, context) => {
       });
     }
 
-    // 🔥 Write to /users/{userId}/dailyLogs/{date}/whoop_cals
+    // Write to /users/{userId}/dailyLogs/{date}/whoop_cals
     const docRef = db
       .collection("users")
       .doc(userId)
