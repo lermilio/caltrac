@@ -89,50 +89,63 @@ exports.addWeightLog = functions.https.onCall(async (data, context) => { // Defi
   });
 });
 
-const fetch = require("node-fetch");
-
-// Secure: pulls token from Firebase env config (set it with CLI)
-const WHOOP_ACCESS_TOKEN = functions.config().whoop.token;
+const axios = require("axios");
+require("dotenv").config();
 
 exports.fetchWhoopCalories = functions.https.onCall(async (data, context) => {
+  const { start, end, userId } = data;
+
+  if (!start || !end || !userId) {
+    throw new functions.https.HttpsError("invalid-argument", "Missing required fields.");
+  }
+
   try {
-    const { date, userId } = data;
-    console.log("🔥 fetchWhoopCalories called", date, userId);
-
-    const start = `${date}T00:00:00.000Z`;
-    const end = `${date}T23:59:59.999Z`;
-
-    const url = `https://api.prod.whoop.com/users/me/activities?start=${start}&end=${end}`;
-
-    const response = await fetch(url, {
-      method: "GET",
+    const response = await axios.get("https://api.prod.whoop.com/developer/v1/activity", {
       headers: {
-        Authorization: `Bearer ${WHOOP_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${process.env.WHOOP_ACCESS_TOKEN}`,
       },
+      params: { start, end },
     });
 
-    const json = await response.json();
+    const activities = response.data;
 
-    let totalCalories = 0;
-    if (Array.isArray(json)) {
-      json.forEach((activity) => {
-        totalCalories += activity.score_calories || 0;
-      });
-    }
+    const whoopCals = Math.round(
+      activities.reduce((sum, a) => sum + a.kilojoules / 4.184, 0)
+    );
 
-    // Write to /users/{userId}/dailyLogs/{date}/whoop_cals
-    const docRef = db
+    const dateKey = start.split("T")[0]; // 'yyyy-MM-dd'
+
+    const docRef = admin
+      .firestore()
       .collection("users")
       .doc(userId)
       .collection("dailyLogs")
-      .doc(date);
+      .doc(dateKey);
 
-    await docRef.set({ whoop_cals: totalCalories }, { merge: true });
+    const docSnap = await docRef.get();
+    const dataExists = docSnap.exists ? docSnap.data() : {};
+    const extraCals = dataExists.extra_cals || 0;
 
-    return { success: true, whoop_cals: totalCalories };
+    const caloriesOut = whoopCals + extraCals;
+
+    await docRef.set(
+      {
+        whoop_cals: whoopCals,
+        calories_out: caloriesOut,
+      },
+      { merge: true }
+    );
+
+    return {
+      whoop_cals: whoopCals,
+      calories_out: caloriesOut,
+    };
+
   } catch (error) {
-    console.error("WHOOP fetch error:", error);
-    return { success: false, error: error.message };
+    console.error("WHOOP fetch error:", error.response?.data || error.message);
+    throw new functions.https.HttpsError("internal", "WHOOP API fetch failed.");
   }
 });
+
+
 
