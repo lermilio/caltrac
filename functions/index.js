@@ -93,59 +93,175 @@ const axios = require("axios");
 require("dotenv").config();
 
 exports.fetchWhoopCalories = functions.https.onCall(async (data, context) => {
-  const { start, end, userId } = data;
+  const start = data.start || data?.data?.start;
+  const end = data.end || data?.data?.end;
+  const userId = data.userId || data?.data?.userId;
 
   if (!start || !end || !userId) {
     throw new functions.https.HttpsError("invalid-argument", "Missing required fields.");
   }
 
+  // 1) Always get a valid access token for this user
+  let accessToken;
   try {
+    accessToken = await getFreshAccessToken(userId);
+  } catch (e) {
+    // If we can’t refresh because there’s no refresh_token yet, tell the client to re-auth
+    if (e?.code === "failed-precondition") {
+      throw new functions.https.HttpsError("failed-precondition", "reauth_required");
+    }
+    throw e;
+  }
+
+  try {
+    // 2) Call WHOOP with the user-scoped token
     const response = await axios.get("https://api.prod.whoop.com/developer/v1/activity", {
-      headers: {
-        Authorization: `Bearer ${process.env.WHOOP_ACCESS_TOKEN}`,
-      },
+      headers: { Authorization: `Bearer ${accessToken}` },
       params: { start, end },
     });
 
-    const activities = response.data;
+    const activities = response.data || [];
 
-    const whoopCals = Math.round(
-      activities.reduce((sum, a) => sum + a.kilojoules / 4.184, 0)
-    );
+    // Convert kJ -> kcal and sum
+    const whoopCals = Math.round(activities.reduce((sum, a) => sum + (a.kilojoules || 0) / 4.184, 0));
 
+    // 3) Write to Firestore and compute calories_out = whoop_cals + extra_cals
     const dateKey = start.split("T")[0]; // 'yyyy-MM-dd'
+    const docRef = admin.firestore()
+      .collection("users").doc(userId)
+      .collection("dailyLogs").doc(dateKey);
 
-    const docRef = admin
-      .firestore()
-      .collection("users")
-      .doc(userId)
-      .collection("dailyLogs")
-      .doc(dateKey);
-
-    const docSnap = await docRef.get();
-    const dataExists = docSnap.exists ? docSnap.data() : {};
-    const extraCals = dataExists.extra_cals || 0;
-
+    const snap = await docRef.get();
+    const extraCals = (snap.exists ? (snap.data().extra_cals || 0) : 0);
     const caloriesOut = whoopCals + extraCals;
 
     await docRef.set(
-      {
-        whoop_cals: whoopCals,
-        calories_out: caloriesOut,
-      },
+      { whoop_cals: whoopCals, calories_out: caloriesOut },
       { merge: true }
     );
 
-    return {
-      whoop_cals: whoopCals,
-      calories_out: caloriesOut,
-    };
+    return { whoop_cals: whoopCals, calories_out: caloriesOut };
+  } catch (err) {
+    // If the token somehow went bad between refresh and call, try one silent refresh then retry once.
+    if (err?.response?.status === 401) {
+      try {
+        const retryToken = await getFreshAccessToken(userId); // will refresh if needed
+        const retryResp = await axios.get("https://api.prod.whoop.com/developer/v1/activity", {
+          headers: { Authorization: `Bearer ${retryToken}` },
+          params: { start, end },
+        });
+        const activities = retryResp.data || [];
+        const whoopCals = Math.round(activities.reduce((sum, a) => sum + (a.kilojoules || 0) / 4.184, 0));
 
-  } catch (error) {
-    console.error("WHOOP fetch error:", error.response?.data || error.message);
+        const dateKey = start.split("T")[0];
+        const docRef = admin.firestore()
+          .collection("users").doc(userId)
+          .collection("dailyLogs").doc(dateKey);
+        const snap = await docRef.get();
+        const extraCals = (snap.exists ? (snap.data().extra_cals || 0) : 0);
+        const caloriesOut = whoopCals + extraCals;
+
+        await docRef.set({ whoop_cals: whoopCals, calories_out: caloriesOut }, { merge: true });
+        return { whoop_cals: whoopCals, calories_out: caloriesOut };
+      } catch (e2) {
+        console.error("WHOOP retry failed:", e2.response?.data || e2.message);
+      }
+    }
+
+    console.error("WHOOP fetch error:", err.response?.data || err.message);
     throw new functions.https.HttpsError("internal", "WHOOP API fetch failed.");
   }
 });
 
 
+const WHOOP_TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token";
+
+exports.exchangeWhoopCode = functions.https.onCall(async (data, context) => {
+  const { code, userId } = data || {};
+  if (!code || !userId) {
+    throw new functions.https.HttpsError("invalid-argument", "Missing code or userId.");
+  }
+
+  try {
+    const resp = await axios.post(
+      WHOOP_TOKEN_URL,
+      new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: "http://localhost:8080/callback",
+        client_id: process.env.WHOOP_CLIENT_ID,
+        client_secret: process.env.WHOOP_CLIENT_SECRET,
+      }),
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+    );
+
+    const { access_token, refresh_token, expires_in } = resp.data;
+
+    await db.collection("users").doc(userId)
+      .collection("integrations").doc("whoop")
+      .set({
+        access_token,
+        refresh_token: refresh_token || null,
+        expires_at: Date.now() + (expires_in ?? 3600) * 1000,
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+    return {
+      ok: true,
+      hasRefresh: !!refresh_token,
+      expires_in,
+    };
+  } catch (err) {
+    console.error("exchangeWhoopCode error:", err.response?.data || err.message);
+    throw new functions.https.HttpsError("internal", "WHOOP code exchange failed.");
+  }
+});
+
+async function getFreshAccessToken(userId) {
+  const docRef = db.collection("users").doc(userId).collection("integrations").doc("whoop");
+  const snap = await docRef.get();
+
+  if (!snap.exists) {
+    throw new functions.https.HttpsError("failed-precondition", "No WHOOP tokens found for this user.");
+  }
+
+  const { access_token, refresh_token, expires_at } = snap.data();
+
+  // If token is still valid for > 1 min, just return it
+  if (expires_at && Date.now() < expires_at - 60_000) {
+    return access_token;
+  }
+
+  // Can't refresh if no refresh token stored yet
+  if (!refresh_token) {
+    throw new functions.https.HttpsError("failed-precondition", "reauth_required");
+  }
+
+  try {
+    const resp = await axios.post(
+      WHOOP_TOKEN_URL,
+      new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token,
+        client_id: process.env.WHOOP_CLIENT_ID,
+        client_secret: process.env.WHOOP_CLIENT_SECRET,
+      }),
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+    );
+
+    const { access_token: newAccess, refresh_token: newRefresh, expires_in } = resp.data;
+
+    await docRef.set({
+      access_token: newAccess,
+      refresh_token: newRefresh || refresh_token,
+      expires_at: Date.now() + (expires_in ?? 3600) * 1000,
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return newAccess;
+  } catch (err) {
+    console.error("WHOOP token refresh failed:", err.response?.data || err.message);
+    throw new functions.https.HttpsError("failed-precondition", "reauth_required");
+  }
+}
 

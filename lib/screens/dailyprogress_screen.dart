@@ -44,29 +44,33 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
 
   
   Future<void> updateWhoopCals() async {
-    final now = DateTime.now(); // ✅ get this directly
-    final date = DateFormat('yyyy-MM-dd').format(now); // ✅ correct format
+    final now = DateTime.now().toUtc();
+    final start = DateTime.utc(now.year, now.month, now.day);         // 00:00:00Z
+    final end   = start.add(const Duration(days: 1));                 // next midnight Z    
 
-    final userId = 'e2aPNbtabDSQZVcoRyCIS549reh2';
+    final userId = 'e2aPNbtabDSQZVcoRyCIS549reh2'; // keep if needed for your DB ops
 
-    print("🧠 Sending WHOOP request with:");
-    print(" - date: $date");
-    print(" - userId: $userId");
+    print("📡 Sending WHOOP request:");
+    print("📅 start: $start");
+    print("⏱️ end: $end");
 
     try {
-      final result = await FirebaseFunctions.instance
-          .httpsCallable('fetchWhoopCalories')
-          .call({
-            'date': date,
-            'userId': userId,
-          });
+      final callable = FirebaseFunctions.instance.httpsCallable('fetchWhoopCalories');
+      final res = await callable.call({
+        'start': start.toIso8601String(),
+        'end': end.toIso8601String(),
+        'userId': userId,
+      });
 
-      print("🔥 WHOOP cals updated: ${result.data['whoop_cals']}");
+      final data = Map<String, dynamic>.from(res.data as Map);
+      final whoopCals = (data['whoop_cals'] ?? 0) as int;
+      final caloriesOut = (data['calories_out'] ?? 0) as int;
+
+      print("🔥 WHOOP cals updated: whoop=$whoopCals, out=$caloriesOut");
     } catch (e) {
-      print("💥 Error fetching WHOOP cals: $e");
+      print("❌ Error fetching WHOOP cals: $e");
     }
   }
-
 
    @override
   void initState() {

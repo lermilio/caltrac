@@ -22,6 +22,11 @@
   "functions": [
     {
       "source": "functions",
+      "endpoints": {
+        "fetchWhoopCalories": {
+          "allowUnauthenticated": true
+        }
+      },
       "codebase": "default",
       "ignore": [
         "node_modules",
