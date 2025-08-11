@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+// This widget represents the bottom navigation bar for the app.
 class BottomBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;

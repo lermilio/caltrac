@@ -1,3 +1,4 @@
+// This class handles calorie entry data
 class CaloricEntry {
   final String entry;
   final DateTime date;
@@ -20,7 +21,8 @@ class CaloricEntry {
       'protien': protien,
     };
   }
-
+  
+  // Factory constructor to create an instance from JSON
   factory CaloricEntry.fromJson(Map<String, dynamic> json) {
     return CaloricEntry(
       entry: json['entry'] as String,

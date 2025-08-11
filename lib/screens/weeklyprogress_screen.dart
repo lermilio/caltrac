@@ -1,4 +1,4 @@
-import 'package:caltrac/date_manager.dart';
+import 'package:caltrac/services/date_manager.dart';
 import 'package:caltrac/widgets/progress_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';

@@ -8,7 +8,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-
+// App entry: load .env, init Firebase, then run the app.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load();
@@ -28,6 +28,7 @@ class CalTracApp extends StatefulWidget {
 class _CalTracAppState extends State<CalTracApp> {
   int _currentIndex = 0;
 
+  // List of screens and titles for the bottom navigation bar.
   final List<Widget> _screens = [
     DailyProgressScreen(),
     WeeklyProgressScreen(),
@@ -58,6 +59,7 @@ Widget build(BuildContext context) {
         toolbarHeight: 100,
         backgroundColor: Colors.black,
         title: Text(
+          // Display the title based on the current index.
           _titles[_currentIndex],
           style: const TextStyle(
             color: Colors.white,
@@ -67,6 +69,7 @@ Widget build(BuildContext context) {
           ),
         ),
       ),
+      // Display the current screen based on the selected index.
       body: _screens[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: Colors.black,
@@ -74,6 +77,7 @@ Widget build(BuildContext context) {
         unselectedItemColor: Colors.black,
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
+        // Define the bottom navigation bar items with icons and labels.
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.today), label: 'Daily'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_view_week), label: 'Weekly'),
