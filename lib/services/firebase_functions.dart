@@ -1,15 +1,14 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
 
-
-
+// Logs a nutrition or calorie entry to Firestore via a Firebase Function.
 Future<void> logEntryToFirebase({
   required String userId,
   required DateTime date,
   required Map entryData,
 }) async {
-  final String dateStr = "${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+  final String dateStr =
+      "${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
 
   final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('addEntryLog');
 
@@ -25,6 +24,7 @@ Future<void> logEntryToFirebase({
   }
 }
 
+// Adds or updates extra calories burned for a given date.
 Future<void> logCalsOutToFirebase({
   required String userId,
   required DateTime date,
@@ -39,40 +39,42 @@ Future<void> logCalsOutToFirebase({
 
   final snapshot = await docRef.get();
 
-  // If the document doesn't exist, initialize it
+  // If the doc doesn't exist yet, initialize with base structure
   if (!snapshot.exists) {
     await docRef.set({
       'whoop_cals': 0,
-      'extra_cals': extraCals.toInt(),
-      'calories_out': extraCals.toInt(),
+      'extra_cals': extraCals,
+      'calories_out': extraCals,
       'calories_in': 0,
-      'net_calories' : 0,
+      'net_calories': 0,
       'protein': 0,
-      'carbs' : 0,
-      'fat' : 0,
+      'carbs': 0,
+      'fat': 0,
       'meals': [],
-      'date' : dateKey,
+      'date': dateKey,
     });
     return;
   }
 
+  // Merge in updated calories-out values
   final existing = snapshot.data() ?? {};
   final int whoopCalories = existing['whoop_cals'] ?? 0;
-  final int extraCalories = extraCals.toInt();
-  final int totalCaloriesOut = whoopCalories + extraCalories;
+  final int totalCaloriesOut = whoopCalories + extraCals;
 
   await docRef.set({
-    'extra_cals': extraCalories,
+    'extra_cals': extraCals,
     'calories_out': totalCaloriesOut,
   }, SetOptions(merge: true));
 }
 
+// Logs a weight entry to Firestore via a Firebase Function.
 Future<void> logWeightToFirebase({
   required String userId,
   required DateTime date,
   required double weight,
 }) async {
-  final String dateStr = "${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+  final String dateStr =
+      "${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
 
   final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('addWeightLog');
 
@@ -82,4 +84,3 @@ Future<void> logWeightToFirebase({
     'weight': weight,
   });
 }
-

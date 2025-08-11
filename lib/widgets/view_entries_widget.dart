@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// Widget for viewing and deleting logged meal entries by date
 class ViewEntriesWidget extends StatefulWidget {
   const ViewEntriesWidget({super.key});
 
@@ -13,6 +14,9 @@ class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
   List<Map<String, dynamic>> _meals = [];
+  CalendarFormat _calendarFormat = CalendarFormat.week; // Default to week view
+  final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2';
+
 
   @override
   void initState() {
@@ -20,10 +24,10 @@ class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
     _fetchMealsForDate(_selectedDay);
   }
 
+  // Fetches meals from Firestore for the given date
   Future<void> _fetchMealsForDate(DateTime date) async {
-    final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2'; // Update if app has other users
-
     final dateKey = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+
     final docRef = FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
@@ -33,23 +37,17 @@ class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
     final doc = await docRef.get();
 
     if (doc.exists) {
-      final data = doc.data();
-      final meals = data?['meals'] as List<dynamic>? ?? [];
-
-      setState(() {
-        _meals = meals.cast<Map<String, dynamic>>();
-      });
+      final meals = (doc.data()?['meals'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+      setState(() => _meals = meals);
     } else {
-      setState(() {
-        _meals = [];
-      });
+      setState(() => _meals = []);
     }
   }
 
+  // Deletes a specific meal from Firestore
   Future<void> _deleteMealFromFirebase(Map<String, dynamic> mealToDelete) async {
-
-    final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2'; // Update if app has other users
     final dateKey = "${_selectedDay.year}-${_selectedDay.month.toString().padLeft(2, '0')}-${_selectedDay.day.toString().padLeft(2, '0')}";
+
     final docRef = FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
@@ -57,11 +55,11 @@ class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
         .doc(dateKey);
 
     final doc = await docRef.get();
-
     if (!doc.exists) return;
 
     final meals = List<Map<String, dynamic>>.from(doc['meals'] ?? []);
 
+    // Match and remove the exact meal entry
     meals.removeWhere((meal) =>
       meal['input'] == mealToDelete['input'] &&
       meal['calories'] == mealToDelete['calories'] &&
@@ -71,16 +69,14 @@ class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
     );
 
     await docRef.update({'meals': meals});
-
-    setState(() {
-      _meals = meals;
-    });
+    setState(() => _meals = meals);
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Entry deleted')),
     );
-}
+  }
 
+  // Shows confirmation dialog before deleting a meal
   void _confirmDeleteMeal(Map<String, dynamic> meal) {
     showDialog(
       context: context,
@@ -94,7 +90,7 @@ class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
           ),
           TextButton(
             onPressed: () {
-              Navigator.of(context).pop(); // close dialog
+              Navigator.of(context).pop(); // Close dialog
               _deleteMealFromFirebase(meal);
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
@@ -103,8 +99,6 @@ class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
       ),
     );
   }
-
-  CalendarFormat _calendarFormat = CalendarFormat.week;
 
   @override
   Widget build(BuildContext context) {
@@ -115,16 +109,14 @@ class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
         children: [
           const Text('View Entries', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
+
+          // Calendar for selecting date
           TableCalendar(
             firstDay: DateTime.utc(2024, 1, 1),
             lastDay: DateTime.utc(2030, 12, 31),
             focusedDay: _focusedDay,
-            calendarFormat: _calendarFormat, 
-            onFormatChanged: (format) {
-              setState(() {
-                _calendarFormat = format;
-              });
-            },
+            calendarFormat: _calendarFormat,
+            onFormatChanged: (format) => setState(() => _calendarFormat = format),
             selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
             onDaySelected: (selected, focused) {
               setState(() {
@@ -134,9 +126,14 @@ class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
               _fetchMealsForDate(selected);
             },
           ),
+
           const SizedBox(height: 12),
+
+          // Show meals or placeholder text
           if (_meals.isEmpty)
             const Text("No meals logged for this date."),
+
+          // Render meal cards
           ..._meals.map((meal) => Card(
                 margin: const EdgeInsets.symmetric(vertical: 6),
                 child: ListTile(
@@ -145,7 +142,7 @@ class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
                     'Calories: ${meal['calories']}, Protein: ${meal['protein']}g, Fat: ${meal['fat']}g, Carbs: ${meal['carbs']}g',
                   ),
                   trailing: IconButton(
-                    onPressed: () => _confirmDeleteMeal(meal), 
+                    onPressed: () => _confirmDeleteMeal(meal),
                     icon: const Icon(Icons.delete, color: Colors.red),
                   ),
                 ),

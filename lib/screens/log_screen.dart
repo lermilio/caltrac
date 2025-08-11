@@ -2,46 +2,45 @@ import 'package:caltrac/services/calorie_log_parser.dart';
 import 'package:caltrac/services/firebase_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:caltrac/widgets/view_entries_widget.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 
-
-
+// LogScreen allows users to log food items or extra calories for a specific date.
 class LogScreen extends StatefulWidget{
   const LogScreen({super.key});
-
   @override
   State<LogScreen> createState() => _LogScreenState();
 }
 
 class _LogScreenState extends State<LogScreen> {
 
+  // Controllers for getting user input.
   final TextEditingController _controllerLog = TextEditingController();
   final TextEditingController _controllerCals = TextEditingController();
   final TextEditingController _dateController = TextEditingController(
     text: DateTime.now().toIso8601String().split('T').first, 
   );
 
+  // Dropdown for selecting input type.
   String _selectedOption = 'Enter Item';
-
   final List<String> _options = [
     'Enter Item',
     'Enter Extra Kcals',
   ];
 
+  // Submit user input to Firebase
   void _submitInput() async {
     final rawKcalInput = _controllerCals.text;
     final rawItemInput = _controllerLog.text;
     final dateString = _dateController.text.trim();
-    final currentUserUid = 'e2aPNbtabDSQZVcoRyCIS549reh2'; // Update if app has other users
+    final currentUserUid = 'e2aPNbtabDSQZVcoRyCIS549reh2'; 
 
+    // Validate inputs
     if ( (rawItemInput.isEmpty && rawKcalInput.isEmpty) || dateString.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in both fields')),
       );
       return;
     }
-
     final parsedDate = dateString.isNotEmpty
         ? DateTime.tryParse(dateString)
         : DateTime.now();
@@ -54,8 +53,10 @@ class _LogScreenState extends State<LogScreen> {
 
     try {
 
+      // Submitting extra burned calories to Firebase
       if(_selectedOption == 'Enter Extra Kcals'){
-        //print("ADDING EXTRA CALS");
+
+        // Validate and parse the input
         final parsedInput = int.tryParse(rawKcalInput);
         if(parsedInput == null){
           ScaffoldMessenger.of(context).showSnackBar(
@@ -64,13 +65,13 @@ class _LogScreenState extends State<LogScreen> {
           return;
         }
 
+        // Log to Firebase
         final confirmed = await _showConfirmExtraCalsDialog(
           context: context,
           calories: parsedInput,
           date: parsedDate,
         );
         if(!confirmed) { return; }
-
         await logCalsOutToFirebase(
           userId: currentUserUid, 
           date: parsedDate, 
@@ -78,12 +79,15 @@ class _LogScreenState extends State<LogScreen> {
         );
 
         setState(() {
-          _controllerCals.clear();
-        _dateController.text = DateTime.now().toIso8601String().split('T').first;
+          _controllerCals.clear(); // Clear the input field after logging
+          _dateController.text = DateTime.now().toIso8601String().split('T').first;
         });
       }
 
-      if(_selectedOption == 'Enter Item') {
+      // Submitting a consumed item to Firebase
+      else if(_selectedOption == 'Enter Item') {
+
+        // Validate and parse the input
         final parsedData = await extractNutrition(rawItemInput);
         print('Parsed Data from AI: $parsedData');
 
@@ -122,6 +126,7 @@ class _LogScreenState extends State<LogScreen> {
     }
   }
 
+  // Ask the user to confirm the extra calories input
   Future<bool> _showConfirmExtraCalsDialog({
     required BuildContext context,
     required int calories,
@@ -172,10 +177,10 @@ class _LogScreenState extends State<LogScreen> {
           ],
         );
       },
-    )) ?? false;
+    )) ?? false; // Default to false if dialog is dismissed
   }
 
-
+  // Ask the user to confirm the food item entry and show its extracted data
   Future<bool> _showConfirmDialog({
   required BuildContext context,
   required Map<String, dynamic> entryData,
@@ -224,7 +229,7 @@ class _LogScreenState extends State<LogScreen> {
         );
       },
     )) ??
-    false;
+    false; // Default to false if dialog is dismissed
   }
 
   @override
@@ -255,7 +260,6 @@ class _LogScreenState extends State<LogScreen> {
                   },
                 ),
               ),
-
               if (_selectedOption == 'Enter Item')
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 10),

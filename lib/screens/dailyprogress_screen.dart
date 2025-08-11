@@ -3,16 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 
-
+// DailyProgressScreen shows daily nutritional summary with navigation between days
 class DailyProgressScreen extends StatefulWidget{ 
-
   const DailyProgressScreen({
     super.key, 
   });
-
   @override
   State<DailyProgressScreen> createState() => _DailyProgressScreenState();
 }
@@ -22,8 +19,9 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
   int netCalories(Map<String, dynamic> data) => data['calories_in'] - data['calories_out'];  
   late DateTime _currentDate;
   final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2';
-  Future<Map<String, dynamic>>? _summaryFuture;
+  Future<Map<String, dynamic>>? _summaryFuture;  // Holds the result of fetching a single day’s nutrition data from Firestore.
 
+  // Navigate to next day
   void goToNextDay() {
     setState(() {
       _currentDate = _currentDate.add(Duration(days: 1));
@@ -31,6 +29,7 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
     });
   }
 
+  // Navigate to previous day
   void goToPreviousDay() {
     setState(() {
       _currentDate = _currentDate.subtract(Duration(days: 1));
@@ -42,24 +41,24 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
     return DateFormat('MMM d').format(_currentDate);
   }
 
-  
+  // Fetch WHOOP calories via Firebase Function and update Firestore
   Future<void> updateWhoopCals() async {
     final now = DateTime.now().toUtc();
-    final start = DateTime.utc(now.year, now.month, now.day);         // 00:00:00Z
-    final end   = start.add(const Duration(days: 1));                 // next midnight Z    
+    final start = DateTime.utc(now.year, now.month, now.day);         
+    final end   = start.add(const Duration(days: 1));                
 
-    final userId = 'e2aPNbtabDSQZVcoRyCIS549reh2'; // keep if needed for your DB ops
-
-    print("📡 Sending WHOOP request:");
-    print("📅 start: $start");
-    print("⏱️ end: $end");
+    print("Sending WHOOP request:");
+    print("start: $start");
+    print("end: $end");
 
     try {
+
+      // Call Firebase Function to fetch WHOOP calories
       final callable = FirebaseFunctions.instance.httpsCallable('fetchWhoopCalories');
       final res = await callable.call({
         'start': start.toIso8601String(),
         'end': end.toIso8601String(),
-        'userId': userId,
+        'userId': uid,
       });
 
       final data = Map<String, dynamic>.from(res.data as Map);
@@ -72,16 +71,18 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
     }
   }
 
+  // Initialize state and fetch initial data
    @override
   void initState() {
     _currentDate = DateTime.now();
     super.initState();
-    updateWhoopCals().then((_) {
-      _summaryFuture = fetchDailySummary(uid, _currentDate);
+    updateWhoopCals().then((_) {   
+      _summaryFuture = fetchDailySummary(uid, _currentDate);  // Get current whoop data, then fetch daily summary.
       setState(() {}); 
     });
   }
 
+  // Fetch daily summary data from Firestore
   Future<Map<String, dynamic>> fetchDailySummary(String userId, DateTime date) async {
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
@@ -92,6 +93,7 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
       .doc(DateFormat('yyyy-MM-dd').format(date))
       .get();
 
+    // Return default values if no document exists
     if (!doc.exists) {
       return {
         'calories_in': 0,
@@ -152,9 +154,12 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
                 ],
               ),
               SizedBox(height: 24),
+              // 
               FutureBuilder<Map<String, dynamic>>(
                 future: _summaryFuture,
                 builder: (context, snapshot) {
+
+                  // Handle loading, error, and data states
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const CircularProgressIndicator();
                   }
@@ -164,12 +169,14 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
                   }
 
                   if (!snapshot.hasData || snapshot.data == null) {
-                    return Text('No data found'); // or a placeholder widget
+                    return Text('No data found'); 
                   }
-
+                  
+                  // Extract data from snapshot
                   final data = snapshot.data!;
                   final netCals = (data['calories_in'] ?? 0) - (data['calories_out'] ?? 0);
 
+                  // Build the progress widgets with the fetched data
                   return Column(
                     children: [
                       ProgressWidget(title: 'Calories In', data: data['calories_in'] ?? 0, unit: 'kcal'),

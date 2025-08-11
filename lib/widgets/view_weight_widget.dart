@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
+// Widget to display and manage a list of logged weights from Firestore
 class ViewWeightWidget extends StatefulWidget {
   const ViewWeightWidget({super.key});
 
@@ -12,16 +11,17 @@ class ViewWeightWidget extends StatefulWidget {
 }
 
 class _ViewWeightWidgetState extends State<ViewWeightWidget> {
-  List<Map<String, dynamic>> _weightLogs = [];
+  List<Map<String, dynamic>> _weightLogs = []; // Local list of weight logs
+  final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2'; 
 
   @override
   void initState() {
     super.initState();
-    _fetchWeightLogs();
+    _fetchWeightLogs(); // Load weight logs on init
   }
 
+  // Deletes a weight log from Firestore and local list
   Future<void> _deleteWeightLogFromFirebase(int index) async {
-    final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2'; // Replace with current user's UID if needed
     final docId = _weightLogs[index]['id'];
 
     final docRef = FirebaseFirestore.instance
@@ -31,12 +31,10 @@ class _ViewWeightWidgetState extends State<ViewWeightWidget> {
         .doc(docId);
 
     await docRef.delete();
-
-    setState(() {
-      _weightLogs.removeAt(index);
-    });
+    setState(() => _weightLogs.removeAt(index));
   }
 
+  // Shows confirmation dialog before deleting weight log
   void _confirmDeleteMeal(int index) {
     showDialog(
       context: context,
@@ -50,7 +48,7 @@ class _ViewWeightWidgetState extends State<ViewWeightWidget> {
           ),
           TextButton(
             onPressed: () {
-              Navigator.of(context).pop(); // close dialog
+              Navigator.of(context).pop();
               _deleteWeightLogFromFirebase(index);
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
@@ -60,9 +58,8 @@ class _ViewWeightWidgetState extends State<ViewWeightWidget> {
     );
   }
 
-
+  // Fetches weight logs from Firestore and stores them in local list
   Future<void> _fetchWeightLogs() async {
-    final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2'; // Update if needed
     final docRef = await FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
@@ -94,32 +91,27 @@ class _ViewWeightWidgetState extends State<ViewWeightWidget> {
               itemBuilder: (context, index) {
                 final log = _weightLogs[index];
                 final date = (log['date'] as Timestamp).toDate();
-                final formattedDate = DateFormat('MMMM d, y').format(date); 
+                final formattedDate = DateFormat('MMMM d, y').format(date);
                 final weight = log['weight'];
+
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
                   child: ListTile(
                     title: Text(
-                      "$weight lbs", 
-                      style: const TextStyle(
-                        fontSize: 20,
-                      )
+                      "$weight lbs",
+                      style: const TextStyle(fontSize: 20),
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           formattedDate,
-                          style: const TextStyle(
-                            fontSize: 20,
-                          )
+                          style: const TextStyle(fontSize: 20),
                         ),
                         const SizedBox(width: 8),
                         IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () {
-                            _confirmDeleteMeal(index); 
-                          },
+                          onPressed: () => _confirmDeleteMeal(index),
                         ),
                       ],
                     ),
