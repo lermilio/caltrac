@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 
 
 // DailyProgressScreen shows daily nutritional summary with navigation between days
@@ -25,6 +27,7 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
   void goToNextDay() {
     setState(() {
       _currentDate = _currentDate.add(Duration(days: 1));
+      updateWhoopCals(_currentDate);
       _summaryFuture = fetchDailySummary(uid, _currentDate);
     });
   }
@@ -33,6 +36,7 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
   void goToPreviousDay() {
     setState(() {
       _currentDate = _currentDate.subtract(Duration(days: 1));
+      updateWhoopCals(_currentDate);
       _summaryFuture = fetchDailySummary(uid, _currentDate);
     });
   }
@@ -42,18 +46,15 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
   }
 
   // Fetch WHOOP calories via Firebase Function and update Firestore
-  Future<void> updateWhoopCals() async {
-    final now = DateTime.now().toUtc();
-    final start = DateTime.utc(now.year, now.month, now.day);         
-    final end   = start.add(const Duration(days: 1));                
+  Future<void> updateWhoopCals(DateTime date) async {
+    final start = DateTime.utc(date.year, date.month, date.day);
+    final end = start.add(const Duration(days: 1));
 
     print("Sending WHOOP request:");
     print("start: $start");
     print("end: $end");
 
     try {
-
-      // Call Firebase Function to fetch WHOOP calories
       final callable = FirebaseFunctions.instance.httpsCallable('fetchWhoopCalories');
       final res = await callable.call({
         'start': start.toIso8601String(),
@@ -76,9 +77,9 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
   void initState() {
     _currentDate = DateTime.now();
     super.initState();
-    updateWhoopCals().then((_) {   
-      _summaryFuture = fetchDailySummary(uid, _currentDate);  // Get current whoop data, then fetch daily summary.
-      setState(() {}); 
+    updateWhoopCals(_currentDate).then((_) {
+      _summaryFuture = fetchDailySummary(uid, _currentDate);
+      setState(() {});
     });
   }
 

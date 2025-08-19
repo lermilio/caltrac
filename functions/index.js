@@ -92,6 +92,25 @@ exports.addWeightLog = functions.https.onCall(async (data, context) => { // Defi
 const axios = require("axios");
 require("dotenv").config();
 
+const { defineString } = require("firebase-functions/params");
+
+// Define runtime params (Gen2-friendly)
+const WHOOP_CLIENT_ID_PARAM = defineString("WHOOP_CLIENT_ID");
+const WHOOP_CLIENT_SECRET_PARAM = defineString("WHOOP_CLIENT_SECRET");
+
+// Helper: read creds from params OR plain env, then build Basic auth
+function getBasicAuth() {
+  const id =
+    WHOOP_CLIENT_ID_PARAM.value() || process.env.WHOOP_CLIENT_ID || "";
+  const secret =
+    WHOOP_CLIENT_SECRET_PARAM.value() || process.env.WHOOP_CLIENT_SECRET || "";
+
+  console.log("WHOOP env present?", { id: !!id, secret: !!secret });
+  return "Basic " + Buffer.from(`${id}:${secret}`).toString("base64");
+}
+
+
+
 exports.fetchWhoopCalories = functions.https.onCall(async (data, context) => {
   const start = data.start || data?.data?.start;
   const end = data.end || data?.data?.end;
@@ -115,15 +134,17 @@ exports.fetchWhoopCalories = functions.https.onCall(async (data, context) => {
 
   try {
     // 2) Call WHOOP with the user-scoped token
-    const response = await axios.get("https://api.prod.whoop.com/developer/v1/activity", {
-      headers: { Authorization: `Bearer ${accessToken}` },
+    const response = await axios.get("https://api.prod.whoop.com/developer/v2/cycle", {      headers: { Authorization: `Bearer ${accessToken}` },
       params: { start, end },
     });
 
-    const activities = response.data || [];
-
-    // Convert kJ -> kcal and sum
-    const whoopCals = Math.round(activities.reduce((sum, a) => sum + (a.kilojoules || 0) / 4.184, 0));
+    const activities = Array.isArray(response.data.records) ? response.data.records : [];
+    console.log("WHOOP /cycle response:", response.data); 
+    const targetDate = start.split("T")[0]; // e.g., '2025-08-19'
+    const filtered = activities.filter(a => a.start && a.start.startsWith(targetDate));
+    const whoopCals = Math.round(
+      filtered.reduce((sum, a) => sum + (a.score?.kilojoule || 0) / 4.184, 0)
+    );
 
     // 3) Write to Firestore and compute calories_out = whoop_cals + extra_cals
     const dateKey = start.split("T")[0]; // 'yyyy-MM-dd'
@@ -146,12 +167,19 @@ exports.fetchWhoopCalories = functions.https.onCall(async (data, context) => {
     if (err?.response?.status === 401) {
       try {
         const retryToken = await getFreshAccessToken(userId); // will refresh if needed
-        const retryResp = await axios.get("https://api.prod.whoop.com/developer/v1/activity", {
+        const retryResp = await axios.get("https://api.prod.whoop.com/developer/v2/cycle", {
           headers: { Authorization: `Bearer ${retryToken}` },
           params: { start, end },
         });
-        const activities = retryResp.data || [];
-        const whoopCals = Math.round(activities.reduce((sum, a) => sum + (a.kilojoules || 0) / 4.184, 0));
+
+        console.log("WHOOP /cycle response:", response.data); // <-- Add this line
+
+        const activities = Array.isArray(retryResp.data.records) ? retryResp.data.records : [];
+        console.log("WHOOP /cycle records:", JSON.stringify(activities, null, 2));
+        const filtered = activities.filter(a => a.start && a.start.startsWith(targetDate));
+        const whoopCals = Math.round(
+          filtered.reduce((sum, a) => sum + (a.score?.kilojoule || 0) / 4.184, 0)
+        );
 
         const dateKey = start.split("T")[0];
         const docRef = admin.firestore()
@@ -176,21 +204,29 @@ exports.fetchWhoopCalories = functions.https.onCall(async (data, context) => {
 
 const WHOOP_TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token";
 
+function getWhoopClientCreds() {
+  const id = WHOOP_CLIENT_ID_PARAM.value() || process.env.WHOOP_CLIENT_ID || "";
+  const secret = WHOOP_CLIENT_SECRET_PARAM.value() || process.env.WHOOP_CLIENT_SECRET || "";
+  return { id, secret };
+}
+
 exports.exchangeWhoopCode = functions.https.onCall(async (data, context) => {
   const { code, userId } = data || {};
   if (!code || !userId) {
     throw new functions.https.HttpsError("invalid-argument", "Missing code or userId.");
   }
 
+  const { id, secret } = getWhoopClientCreds();
+
   try {
     const resp = await axios.post(
-      WHOOP_TOKEN_URL,
+      "https://api.prod.whoop.com/oauth/oauth2/token",
       new URLSearchParams({
         grant_type: "authorization_code",
         code,
         redirect_uri: "http://localhost:8080/callback",
-        client_id: process.env.WHOOP_CLIENT_ID,
-        client_secret: process.env.WHOOP_CLIENT_SECRET,
+        client_id: id,
+        client_secret: secret,
       }),
       { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
     );
@@ -227,24 +263,24 @@ async function getFreshAccessToken(userId) {
 
   const { access_token, refresh_token, expires_at } = snap.data();
 
-  // If token is still valid for > 1 min, just return it
   if (expires_at && Date.now() < expires_at - 60_000) {
     return access_token;
   }
 
-  // Can't refresh if no refresh token stored yet
   if (!refresh_token) {
     throw new functions.https.HttpsError("failed-precondition", "reauth_required");
   }
 
+  const { id, secret } = getWhoopClientCreds();
+
   try {
     const resp = await axios.post(
-      WHOOP_TOKEN_URL,
+      "https://api.prod.whoop.com/oauth/oauth2/token",
       new URLSearchParams({
         grant_type: "refresh_token",
         refresh_token,
-        client_id: process.env.WHOOP_CLIENT_ID,
-        client_secret: process.env.WHOOP_CLIENT_SECRET,
+        client_id: id,
+        client_secret: secret,
       }),
       { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
     );
@@ -264,4 +300,3 @@ async function getFreshAccessToken(userId) {
     throw new functions.https.HttpsError("failed-precondition", "reauth_required");
   }
 }
-
