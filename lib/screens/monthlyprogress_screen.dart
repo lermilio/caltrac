@@ -2,6 +2,7 @@ import 'package:caltrac/widgets/progress_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:caltrac/services/date_manager.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
 
 class MonthlyProgressScreen extends StatefulWidget {
@@ -66,9 +67,33 @@ class _MonthlyProgressScreenState extends State<MonthlyProgressScreen> {
   @override
   void initState() {
     super.initState();
-    _range = TimeRange.month(DateTime.now()); // Set current month range
-    _generateDaysInMonth(); // Fill list of days in month
-    _monthlySummaryFuture = fetchMonthlySummary(uid, _range, _daysInMonth); // Load data
+    _range = TimeRange.month(DateTime.now());
+    _generateDaysInMonth();
+    updateWhoopForMonth().then((_) {
+      _monthlySummaryFuture = fetchMonthlySummary(uid, _range, _daysInMonth);
+      setState(() {});
+    });
+  }
+
+  Future<void> updateWhoopCalsForDate(DateTime date, String uid) async {
+    final start = DateTime.utc(date.year, date.month, date.day);
+    final end = start.add(const Duration(days: 1));
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable('fetchWhoopCalories');
+      await callable.call({
+        'start': start.toIso8601String(),
+        'end': end.toIso8601String(),
+        'userId': uid,
+      });
+    } catch (e) {
+      print("❌ Error fetching WHOOP cals for $date: $e");
+    }
+  }
+
+  Future<void> updateWhoopForMonth() async {
+    for (final day in _daysInMonth) {
+      await updateWhoopCalsForDate(day, uid);
+    }
   }
 
   // Builds list of DateTime objects for each day in month up to today
@@ -84,7 +109,10 @@ class _MonthlyProgressScreenState extends State<MonthlyProgressScreen> {
     setState(() {
       _range = _range.nextMonth();
       _generateDaysInMonth();
-      _monthlySummaryFuture = fetchMonthlySummary(uid, _range, _daysInMonth);
+      updateWhoopForMonth().then((_) {
+        _monthlySummaryFuture = fetchMonthlySummary(uid, _range, _daysInMonth);
+        setState(() {});
+      });
     });
   }
 
@@ -93,7 +121,10 @@ class _MonthlyProgressScreenState extends State<MonthlyProgressScreen> {
     setState(() {
       _range = _range.previousMonth();
       _generateDaysInMonth();
-      _monthlySummaryFuture = fetchMonthlySummary(uid, _range, _daysInMonth);
+      updateWhoopForMonth().then((_) {
+        _monthlySummaryFuture = fetchMonthlySummary(uid, _range, _daysInMonth);
+        setState(() {});
+      });
     });
   }
 
@@ -141,7 +172,17 @@ class _MonthlyProgressScreenState extends State<MonthlyProgressScreen> {
                     return Text('Error: ${snapshot.error}');
                   }
 
+                  if (!snapshot.hasData || snapshot.data == null) {
+                    // Still waiting for data to be written to Firestore, show loading
+                    return const CircularProgressIndicator();
+                  }
+
+                  // Optionally, check if all values are zero and then show "No data" message
                   final data = snapshot.data!;
+                  final allZero = data.values.every((v) => v == 0);
+                  if (allZero) {
+                    return const Text('No data available for this month.');
+                  }
 
                   return Column(
                     children: [

@@ -2,6 +2,7 @@ import 'package:caltrac/services/date_manager.dart';
 import 'package:caltrac/widgets/progress_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
 
 class WeeklyProgressScreen extends StatefulWidget {
@@ -64,13 +65,37 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
     };
   }
 
+  Future<void> updateWhoopCalsForDate(DateTime date, String uid) async {
+    final start = DateTime.utc(date.year, date.month, date.day);
+    final end = start.add(const Duration(days: 1));
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable('fetchWhoopCalories');
+      await callable.call({
+        'start': start.toIso8601String(),
+        'end': end.toIso8601String(),
+        'userId': uid,
+      });
+    } catch (e) {
+      print("❌ Error fetching WHOOP cals for $date: $e");
+    }
+  }
+
+  Future<void> updateWhoopForWeek() async {
+    for (final day in _daysInWeek) {
+      await updateWhoopCalsForDate(day, uid);
+    }
+  }
+
   @override
   void initState() {
-    _range = TimeRange.week(DateTime.now()); // Set current week range
+    _range = TimeRange.week(DateTime.now());
     _daysInWeek = List.generate(7, (i) => _range.start.add(Duration(days: i)))
-        .where((day) => !day.isAfter(DateTime.now())) // Exclude future days
+        .where((day) => !day.isAfter(DateTime.now()))
         .toList();
-    _weeklySummaryFuture = fetchWeeklySummary(uid, _range); // Load weekly data
+    updateWhoopForWeek().then((_) {
+      _weeklySummaryFuture = fetchWeeklySummary(uid, _range);
+      setState(() {});
+    });
   }
 
   // Navigate to next week and refresh data
@@ -80,7 +105,10 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
       _daysInWeek = List.generate(7, (i) => _range.start.add(Duration(days: i)))
           .where((day) => !day.isAfter(DateTime.now()))
           .toList();
-      _weeklySummaryFuture = fetchWeeklySummary(uid, _range);
+      updateWhoopForWeek().then((_) {
+        _weeklySummaryFuture = fetchWeeklySummary(uid, _range);
+        setState(() {});
+      });
     });
   }
 
@@ -91,7 +119,10 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
       _daysInWeek = List.generate(7, (i) => _range.start.add(Duration(days: i)))
           .where((day) => !day.isAfter(DateTime.now()))
           .toList();
-      _weeklySummaryFuture = fetchWeeklySummary(uid, _range);
+      updateWhoopForWeek().then((_) {
+        _weeklySummaryFuture = fetchWeeklySummary(uid, _range);
+        setState(() {});
+      });    
     });
   }
 
@@ -138,7 +169,17 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
                     return Text('Error: ${snapshot.error}');
                   }
 
+                  if (!snapshot.hasData || snapshot.data == null) {
+                    // Still waiting for data to be written to Firestore, show loading
+                    return const CircularProgressIndicator();
+                  }
+
+                  // Optionally, check if all values are zero and then show "No data" message
                   final data = snapshot.data!;
+                  final allZero = data.values.every((v) => v == 0);
+                  if (allZero) {
+                    return const Text('No data available for this month.');
+                  }
 
                   return Column(
                     children: [
