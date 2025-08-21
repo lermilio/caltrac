@@ -45,6 +45,21 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
 
   // Fetch WHOOP calories via Firebase Function and update Firestore
   Future<void> updateWhoopCals(DateTime date) async {
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('dailyLogs')
+        .doc(DateFormat('yyyy-MM-dd').format(date))
+        .get();
+
+    final data = doc.data();
+    if (data != null && (data['whoop_cals'] ?? 0) > 0) {
+      // Data already exists, skip fetching
+      print("WHOOP cals already present for $date, skipping fetch.");
+      return;
+    }
+
+    // Fetch from WHOOP as before
     final start = DateTime.utc(date.year, date.month, date.day);
     final end = start.add(const Duration(days: 1));
 
@@ -64,9 +79,9 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
       final whoopCals = (data['whoop_cals'] ?? 0) as int;
       final caloriesOut = (data['calories_out'] ?? 0) as int;
 
-      print("🔥 WHOOP cals updated: whoop=$whoopCals, out=$caloriesOut");
+      print("WHOOP cals updated: whoop=$whoopCals, out=$caloriesOut");
     } catch (e) {
-      print("❌ Error fetching WHOOP cals: $e");
+      print("Error fetching WHOOP cals: $e");
     }
   }
 
@@ -168,12 +183,19 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
                   }
 
                   if (!snapshot.hasData || snapshot.data == null) {
-                    return Text('No data found'); 
+                    // Still waiting for data to be written to Firestore, show loading
+                    return const CircularProgressIndicator();
                   }
+
                   
                   // Extract data from snapshot
                   final data = snapshot.data!;
                   final netCals = (data['calories_in'] ?? 0) - (data['calories_out'] ?? 0);
+
+                  final allZero = data.values.every((v) => v == 0);
+                  if (allZero) {
+                    return const Text('No data available for this day.');
+                  }
 
                   // Build the progress widgets with the fetched data
                   return Column(

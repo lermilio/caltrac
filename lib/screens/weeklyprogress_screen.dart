@@ -66,6 +66,21 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
   }
 
   Future<void> updateWhoopCalsForDate(DateTime date, String uid) async {
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('dailyLogs')
+        .doc(DateFormat('yyyy-MM-dd').format(date))
+        .get();
+
+    final data = doc.data();
+    if (data != null && (data['whoop_cals'] ?? 0) > 0) {
+      // Data already exists, skip fetching
+      print("WHOOP cals already present for $date, skipping fetch.");
+      return;
+    }
+
+    // Otherwise, fetch from WHOOP
     final start = DateTime.utc(date.year, date.month, date.day);
     final end = start.add(const Duration(days: 1));
     try {
@@ -76,7 +91,7 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
         'userId': uid,
       });
     } catch (e) {
-      print("❌ Error fetching WHOOP cals for $date: $e");
+      print("Error fetching WHOOP cals for $date: $e");
     }
   }
 
@@ -178,7 +193,7 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
                   final data = snapshot.data!;
                   final allZero = data.values.every((v) => v == 0);
                   if (allZero) {
-                    return const Text('No data available for this month.');
+                    return const Text('No data available for this week.');
                   }
 
                   return Column(
