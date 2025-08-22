@@ -1,20 +1,30 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 import 'package:caltrac/screens/dailyprogress_screen.dart';
 import 'package:caltrac/screens/weeklyprogress_screen.dart';
 import 'package:caltrac/screens/monthlyprogress_screen.dart';
 import 'package:caltrac/screens/log_screen.dart';
 import 'package:caltrac/screens/weight_screen.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-// App entry: load .env, init Firebase, then run the app.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+
+  if (Platform.isIOS) {
+    // iOS: AppDelegate.swift already called FirebaseApp.configure()
+    // This just grabs the default app without reconfiguring.
+    await Firebase.initializeApp();
+  } else {
+    // Android/Web/etc: use generated options
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
+
   runApp(const CalTracApp());
 }
 
