@@ -44,33 +44,42 @@ class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
     }
   }
 
-  // Deletes a specific meal from Firestore
+  int _asInt(dynamic v) => v is int ? v : (v is num ? v.round() : 0);
+
   Future<void> _deleteMealFromFirebase(Map<String, dynamic> mealToDelete) async {
-    final dateKey = "${_selectedDay.year}-${_selectedDay.month.toString().padLeft(2, '0')}-${_selectedDay.day.toString().padLeft(2, '0')}";
+    final dateKey =
+        "${_selectedDay.year}-${_selectedDay.month.toString().padLeft(2, '0')}-${_selectedDay.day.toString().padLeft(2, '0')}";
 
     final docRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('dailyLogs')
-        .doc(dateKey);
+        .collection('users').doc(uid)
+        .collection('dailyLogs').doc(dateKey);
 
-    final doc = await docRef.get();
-    if (!doc.exists) return;
+    final snap = await docRef.get();
+    if (!snap.exists) return;
 
-    final meals = List<Map<String, dynamic>>.from(doc['meals'] ?? []);
-
-    // Match and remove the exact meal entry
-    meals.removeWhere((meal) =>
-      meal['input'] == mealToDelete['input'] &&
-      meal['calories'] == mealToDelete['calories'] &&
-      meal['protein'] == mealToDelete['protein'] &&
-      meal['carbs'] == mealToDelete['carbs'] &&
-      meal['fat'] == mealToDelete['fat']
+    final meals = List<Map<String, dynamic>>.from(
+      (snap.data()?['meals'] as List? ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map)),
     );
 
-    await docRef.update({'meals': meals});
-    setState(() => _meals = meals);
+    // your existing matcher
+    meals.removeWhere((meal) =>
+        meal['input']   == mealToDelete['input']   &&
+        (meal['calories'] ?? 0) == (mealToDelete['calories'] ?? 0) &&
+        (meal['protein']  ?? 0) == (mealToDelete['protein']  ?? 0) &&
+        (meal['carbs']    ?? 0) == (mealToDelete['carbs']    ?? 0) &&
+        (meal['fat']      ?? 0) == (mealToDelete['fat']      ?? 0));
 
+    // 🔑 update the array AND decrement the rollups in ONE write
+    await docRef.update({
+      'meals': meals,
+      'calories_in': FieldValue.increment(-_asInt(mealToDelete['calories'])),
+      'carbs':       FieldValue.increment(-_asInt(mealToDelete['carbs'])),
+      'fat':         FieldValue.increment(-_asInt(mealToDelete['fat'])),
+      'protein':     FieldValue.increment(-_asInt(mealToDelete['protein'])),
+    });
+
+    setState(() => _meals = meals);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Entry deleted')),
     );

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/material.dart'; 
 
 
 // DailyProgressScreen shows daily nutritional summary with navigation between days
@@ -53,9 +54,9 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
         .get();
 
     final data = doc.data();
-    if (data != null && (data['whoop_cals'] ?? 0) > 0) {
-      // Data already exists, skip fetching
-      print("WHOOP cals already present for $date, skipping fetch.");
+    final isToday = DateUtils.isSameDay(date, DateTime.now());
+    if (data != null && (data['whoop_cals'] ?? 0) > 0 && !isToday) {
+      // Data exists and the day is NOT today then skip fetching
       return;
     }
 
