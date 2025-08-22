@@ -20,7 +20,7 @@ Future<Map<String, dynamic>> extractNutrition(String userInput) async {
         {
           "role": "system",
           // System prompt defines the assistant's role & strict JSON output format
-          "content": "You are a nutrition logging assistant. The user may enter either full food descriptions (e.g. '10oz grilled chicken breast') or manual data (e.g. '1000 calories, 100g protein'). Extract calories, protein, carbs, and fat. Always return JSON like:{\"calories\":123,\"protein\":30,\"carbs\":10,\"fat\":5}. If any value is missing, use 0."
+          "content": "You are a nutrition logging assistant. The user may enter either full food descriptions (e.g. '10oz grilled chicken breast') or manual data (e.g. '1000 calories, 100g protein'). Extract calories, protein, carbs, and fat. Numbers extracted should always be integers. Always return JSON like:{\"calories\":123,\"protein\":30,\"carbs\":10,\"fat\":5}. If any value is missing, use 0."
         },
         {
           "role": "user",

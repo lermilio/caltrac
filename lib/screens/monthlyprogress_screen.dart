@@ -142,6 +142,29 @@ class _MonthlyProgressScreenState extends State<MonthlyProgressScreen> {
     });
   }
 
+  String formatTrimmedMonth(TimeRange r) {
+    final today = DateTime.now();
+    final monthStart = DateTime(r.start.year, r.start.month, 1);
+    final monthEnd   = DateTime(r.end.year, r.end.month, r.end.day);
+
+    // Trim to today if this is the current month
+    final isCurrentMonth = r.start.month == today.month && r.start.year == today.year;
+    final displayEnd = isCurrentMonth
+        ? DateTime(today.year, today.month, today.day)
+        : monthEnd;
+
+    // If month is complete (past months), you can show a clean "August 2025"
+    final isPastMonth = displayEnd.isBefore(today) && !isCurrentMonth;
+    if (isPastMonth) {
+      return DateFormat('MMMM yyyy').format(monthStart);
+    }
+
+    // Otherwise show a range like "Aug 1 – 22"
+    final startFmt = DateFormat('MMM d').format(monthStart);
+    final endFmt   = DateFormat('d').format(displayEnd);
+    return '$startFmt – $endFmt';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -161,7 +184,7 @@ class _MonthlyProgressScreenState extends State<MonthlyProgressScreen> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    _range.formatRange(),
+                    formatTrimmedMonth(_range),
                     style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(width: 10),

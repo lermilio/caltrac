@@ -13,14 +13,24 @@ class WeeklyProgressScreen extends StatefulWidget {
 }
 
 class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
-  late TimeRange _range; // Current week range
-  late List<DateTime> _daysInWeek; // Days in current week up to today
+  late TimeRange _range; 
+
+  // keep all days if it's a past week; trim to today if it's the current week; (future weeks end up empty)
+  List<DateTime> _daysForRange(TimeRange range) {
+    final today = DateTime.now();
+    final all = List.generate(7, (i) => range.start.add(Duration(days: i)));
+    return all.where((d) => !d.isAfter(today)).toList();
+  }
 
   // Calculations for weekly totals and averages
+  int _denomFor(TimeRange r) {
+    final len = _daysForRange(r).length;
+    return len == 0 ? 1 : len; // avoid /0 for future weeks
+  }
   int weeklyNetCalories(Map<String, dynamic> data) => data['calories_in'] - data['calories_out'];  
-  int avgDailyProtein(Map<String, dynamic> data) => ((data['protein'] ?? 0) / _daysInWeek.length).round();    
-  int avgDailyCarbs(Map<String, dynamic> data) => ((data['carbs'] ?? 0) / _daysInWeek.length).round();  
-  int avgDailyFats(Map<String, dynamic> data) => ((data['fat'] ?? 0) / _daysInWeek.length).round();  
+  int avgDailyProtein(Map<String, dynamic> data) => ((data['protein'] ?? 0) / _denomFor(_range)).round();    
+  int avgDailyCarbs(Map<String, dynamic> data) => ((data['carbs'] ?? 0) / _denomFor(_range)).round();  
+  int avgDailyFats(Map<String, dynamic> data) => ((data['fat'] ?? 0) / _denomFor(_range)).round();  
 
   final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2'; 
   Future<Map<String, dynamic>>? _weeklySummaryFuture; // Weekly summary data
@@ -34,7 +44,7 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
     int totalProtein = 0;
     int totalCarbs = 0;
 
-    for (int i = 0; i < _daysInWeek.length; i++) {
+    for (int i = 0; i < _denomFor(_range); i++) {
       final DateTime date = dateRange.start.add(Duration(days: i));
 
       final doc = firestore
@@ -95,50 +105,58 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
     }
   }
 
-  Future<void> updateWhoopForWeek() async {
-    for (final day in _daysInWeek) {
+  Future<void> updateWhoopForRange(TimeRange range) async {
+    for (final day in _daysForRange(range)) {
       await updateWhoopCalsForDate(day, uid);
     }
   }
 
   @override
   void initState() {
+    super.initState();
     _range = TimeRange.week(DateTime.now());
-    _daysInWeek = List.generate(7, (i) => _range.start.add(Duration(days: i)))
-        .where((day) => !day.isAfter(DateTime.now()))
-        .toList();
-    updateWhoopForWeek().then((_) {
-      _weeklySummaryFuture = fetchWeeklySummary(uid, _range);
-      setState(() {});
-    });
-  }
-
-  // Navigate to next week and refresh data
-  void goToNextWeek() {
-    setState(() {
-      _range = _range.nextWeek();
-      _daysInWeek = List.generate(7, (i) => _range.start.add(Duration(days: i)))
-          .where((day) => !day.isAfter(DateTime.now()))
-          .toList();
-      updateWhoopForWeek().then((_) {
+    // kick WHOOP updates, then fetch summary
+    updateWhoopForRange(_range).then((_) {
+      setState(() {
         _weeklySummaryFuture = fetchWeeklySummary(uid, _range);
-        setState(() {});
       });
     });
   }
 
-  // Navigate to previous week and refresh data
+  // Navigate to next week, updating the range and fetching new data
+  void goToNextWeek() {
+    setState(() {
+      _range = _range.nextWeek();
+      _weeklySummaryFuture = fetchWeeklySummary(uid, _range);
+    });
+    updateWhoopForRange(_range).then((_) {
+      if (mounted) setState(() {}); // optional nudge
+    });
+  }
+
+  // Navigate to the previous week, update
   void goToPreviousWeek() {
     setState(() {
       _range = _range.previousWeek();
-      _daysInWeek = List.generate(7, (i) => _range.start.add(Duration(days: i)))
-          .where((day) => !day.isAfter(DateTime.now()))
-          .toList();
-      updateWhoopForWeek().then((_) {
-        _weeklySummaryFuture = fetchWeeklySummary(uid, _range);
-        setState(() {});
-      });    
+      _weeklySummaryFuture = fetchWeeklySummary(uid, _range);
     });
+    updateWhoopForRange(_range).then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  String formatTrimmedWeek(TimeRange r) {
+    final today = DateTime.now();
+    final start = r.start;
+    final end = r.end.isAfter(today)
+        ? DateTime(today.year, today.month, today.day)  // trim to today
+        : r.end;                                        // full week for past weeks
+
+    // If months match, show "Aug 17 – 22"; otherwise "Aug 31 – Sep 2"
+    final sameMonth = start.month == end.month && start.year == end.year;
+    final startFmt = DateFormat('MMM d').format(start);
+    final endFmt   = sameMonth ? DateFormat('d').format(end) : DateFormat('MMM d').format(end);
+    return '$startFmt – $endFmt';
   }
 
   @override
@@ -160,7 +178,7 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    _range.formatRange(),
+                    formatTrimmedWeek(_range),
                     style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(width: 10),
