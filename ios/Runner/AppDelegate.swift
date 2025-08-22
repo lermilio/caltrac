@@ -1,6 +1,6 @@
 import UIKit
 import Flutter
-import FirebaseCore   // ← add this
+import FirebaseCore   
 
 @UIApplicationMain
 class AppDelegate: FlutterAppDelegate {
@@ -8,7 +8,7 @@ class AppDelegate: FlutterAppDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    FirebaseApp.configure()  // ← add this (initializes before Dart runs)
+    FirebaseApp.configure() // (initializes before Dart runs)
 
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)

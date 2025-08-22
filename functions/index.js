@@ -172,7 +172,7 @@ exports.fetchWhoopCalories = functions.https.onCall(async (data, context) => {
           params: { start, end },
         });
 
-        console.log("WHOOP /cycle response:", response.data); // <-- Add this line
+        console.log("WHOOP /cycle response:", response.data); 
 
         const activities = Array.isArray(retryResp.data.records) ? retryResp.data.records : [];
         console.log("WHOOP /cycle records:", JSON.stringify(activities, null, 2));
