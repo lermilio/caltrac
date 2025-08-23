@@ -7,12 +7,16 @@ class ViewWeightWidget extends StatefulWidget {
   const ViewWeightWidget({super.key});
 
   @override
-  State<ViewWeightWidget> createState() => _ViewWeightWidgetState();
+  State<ViewWeightWidget> createState() => ViewWeightWidgetState();
 }
 
-class _ViewWeightWidgetState extends State<ViewWeightWidget> {
+class ViewWeightWidgetState extends State<ViewWeightWidget> {
   List<Map<String, dynamic>> _weightLogs = []; // Local list of weight logs
   final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2'; 
+
+  Future<void> reloadForDate(DateTime date) async {
+    await _fetchWeightLogs();
+  }
 
   @override
   void initState() {
@@ -90,8 +94,9 @@ class _ViewWeightWidgetState extends State<ViewWeightWidget> {
               itemCount: _weightLogs.length,
               itemBuilder: (context, index) {
                 final log = _weightLogs[index];
-                final date = (log['date'] as Timestamp).toDate();
-                final formattedDate = DateFormat('MMMM d, y').format(date);
+                final dayKey = log['id'] as String; // "yyyy-MM-dd"
+                final localDate = DateTime.parse(dayKey); // local midnight of that calendar day
+                final formattedDate = DateFormat('MMMM d, y').format(localDate);
                 final weight = log['weight'];
 
                 return Padding(

@@ -10,6 +10,10 @@ class WeightScreen extends StatefulWidget {
 }
 
 class _WeightScreenState extends State<WeightScreen> {
+
+  final GlobalKey<ViewWeightWidgetState> _weightKey = GlobalKey<ViewWeightWidgetState>();
+
+
   // Controllers for text inputs
   final TextEditingController _controllerWeight = TextEditingController();
   final TextEditingController _controllerDate = TextEditingController(
@@ -56,6 +60,7 @@ class _WeightScreenState extends State<WeightScreen> {
         date: parsedDate,
         weight: double.parse(weightInput),
       );
+      _weightKey.currentState?.reloadForDate(parsedDate);
       setState(() {
         _controllerWeight.clear();
       });
@@ -145,7 +150,7 @@ class _WeightScreenState extends State<WeightScreen> {
           const SizedBox(height: 30),
 
           // Display list of logged weights
-          const Expanded(child: ViewWeightWidget()),
+          Expanded(child: ViewWeightWidget(key: _weightKey)),
         ],
       ),
     );

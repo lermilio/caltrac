@@ -54,13 +54,26 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
         .get();
 
     final data = doc.data();
+    
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final dayKey = DateTime(date.year, date.month, date.day);
+
     final isToday = DateUtils.isSameDay(date, DateTime.now());
-    if (data != null && (data['whoop_cals'] ?? 0) > 0 && !isToday) {
-      // Data exists and the day is NOT today then skip fetching
+    final isYesterday = dayKey.isAtSameMomentAs(yesterday);
+
+    if (data != null && (data['whoop_cals'] ?? 0) > 0 && !isToday && !isYesterday) {
+      // Data exists and the day is NOT today or yesterday (in case we log on after midnight),
+      // so skip fetching
+      print("Skipping fetch for $dayKey (already have whoop_cals=${
+          data['whoop_cals']
+      })");
       return;
     }
+    
 
-    // Fetch from WHOOP as before
+    // Fetch from WHOOP
     final start = DateTime.utc(date.year, date.month, date.day);
     final end = start.add(const Duration(days: 1));
 

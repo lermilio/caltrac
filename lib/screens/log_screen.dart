@@ -13,6 +13,8 @@ class LogScreen extends StatefulWidget{
 
 class _LogScreenState extends State<LogScreen> {
 
+  final GlobalKey<ViewEntriesWidgetState> _entriesKey = GlobalKey<ViewEntriesWidgetState>();
+
   // Controllers for getting user input.
   final TextEditingController _controllerLog = TextEditingController();
   final TextEditingController _controllerCals = TextEditingController();
@@ -71,12 +73,15 @@ class _LogScreenState extends State<LogScreen> {
           calories: parsedInput,
           date: parsedDate,
         );
+
         if(!confirmed) { return; }
+
         await logCalsOutToFirebase(
           userId: currentUserUid, 
           date: parsedDate, 
           extraCals: parsedInput
         );
+        _entriesKey.currentState?.reloadForDate(parsedDate);
 
         setState(() {
           _controllerCals.clear(); // Clear the input field after logging
@@ -111,6 +116,7 @@ class _LogScreenState extends State<LogScreen> {
           date: parsedDate,
           entryData: entryData,
         );
+        _entriesKey.currentState?.reloadForDate(parsedDate);
 
         setState(() {
           _controllerLog.clear();
@@ -309,7 +315,7 @@ class _LogScreenState extends State<LogScreen> {
                 padding: EdgeInsets.symmetric(horizontal: 30, vertical: 10),
                 child: Divider(),
               ),
-              const ViewEntriesWidget(),
+              ViewEntriesWidget(key: _entriesKey),
             ],
           ),
         ),

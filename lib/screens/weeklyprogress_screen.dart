@@ -23,14 +23,14 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
   }
 
   // Calculations for weekly totals and averages
-  int _denomFor(TimeRange r) {
+  int _avgDenomFor(TimeRange r) {
     final len = _daysForRange(r).length;
-    return len == 0 ? 1 : len; // avoid /0 for future weeks
+    return len == 0 ? 1 : len;
   }
   int weeklyNetCalories(Map<String, dynamic> data) => data['calories_in'] - data['calories_out'];  
-  int avgDailyProtein(Map<String, dynamic> data) => ((data['protein'] ?? 0) / _denomFor(_range)).round();    
-  int avgDailyCarbs(Map<String, dynamic> data) => ((data['carbs'] ?? 0) / _denomFor(_range)).round();  
-  int avgDailyFats(Map<String, dynamic> data) => ((data['fat'] ?? 0) / _denomFor(_range)).round();  
+  int avgDailyProtein(Map<String, dynamic> data) => ((data['protein'] ?? 0) / _avgDenomFor(_range)).round();    
+  int avgDailyCarbs(Map<String, dynamic> data) => ((data['carbs'] ?? 0) / _avgDenomFor(_range)).round();  
+  int avgDailyFats(Map<String, dynamic> data) => ((data['fat'] ?? 0) / _avgDenomFor(_range)).round();  
 
   final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2'; 
   Future<Map<String, dynamic>>? _weeklySummaryFuture; // Weekly summary data
@@ -44,25 +44,18 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
     int totalProtein = 0;
     int totalCarbs = 0;
 
-    for (int i = 0; i < _denomFor(_range); i++) {
-      final DateTime date = dateRange.start.add(Duration(days: i));
-
-      final doc = firestore
-          .collection('users')
-          .doc(userId)
-          .collection('dailyLogs')
-          .doc(DateFormat('yyyy-MM-dd').format(date));
-
-      final docSnap = await doc.get();
-      if (!docSnap.exists) continue; // Skip if no data for the day
-
+    for (final date in _daysForRange(dateRange)) {      
+    final doc = firestore.collection('users').doc(userId)
+      .collection('dailyLogs').doc(DateFormat('yyyy-MM-dd').format(date));
+    final docSnap = await doc.get();
+    if (!docSnap.exists) continue;
       final data = docSnap.data();
       if (data != null) {
         totalCalsIn += (data['calories_in'] ?? 0) as int;
-        totalCarbs += (data['carbs'] ?? 0) as int;
-        totalFats += (data['fat'] ?? 0) as int;
-        totalProtein += (data['protein'] ?? 0) as int;
-        totalCalsOut += (data['calories_out'] ?? 0) as int;
+        totalCarbs  += (data['carbs']       ?? 0) as int;
+        totalFats   += (data['fat']         ?? 0) as int;
+        totalProtein+= (data['protein']     ?? 0) as int;
+        totalCalsOut+= (data['calories_out']?? 0) as int;
       }
     }
 
@@ -84,12 +77,21 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
         .get();
 
     final data = doc.data();
-    if (data != null && (data['whoop_cals'] ?? 0) > 0) {
-      // Data already exists, skip fetching
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final dayKey = DateTime(date.year, date.month, date.day);
+
+    final isToday = dayKey.isAtSameMomentAs(today);
+    final isYesterday = dayKey.isAtSameMomentAs(yesterday);
+
+    if (data != null && (data['whoop_cals'] ?? 0) > 0 && !isToday && !isYesterday) {
+      // Data exists and the day is not today or yesterday → skip fetching
       print("WHOOP cals already present for $date, skipping fetch.");
       return;
     }
-
+    
     // Otherwise, fetch from WHOOP
     final start = DateTime.utc(date.year, date.month, date.day);
     final end = start.add(const Duration(days: 1));
@@ -148,14 +150,19 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
   String formatTrimmedWeek(TimeRange r) {
     final today = DateTime.now();
     final start = r.start;
-    final end = r.end.isAfter(today)
-        ? DateTime(today.year, today.month, today.day)  // trim to today
-        : r.end;                                        // full week for past weeks
+    final end = r.end;
 
-    // If months match, show "Aug 17 – 22"; otherwise "Aug 31 – Sep 2"
-    final sameMonth = start.month == end.month && start.year == end.year;
+    final isFutureWeek = start.isAfter(DateTime(today.year, today.month, today.day));
+    final isCurrentWeek = !isFutureWeek && end.isAfter(today);
+
+    final displayEnd = isCurrentWeek
+        ? DateTime(today.year, today.month, today.day)  // trim only current week
+        : end;                                          // full range for past/future
+
+    final sameMonth = start.month == displayEnd.month && start.year == displayEnd.year;
     final startFmt = DateFormat('MMM d').format(start);
-    final endFmt   = sameMonth ? DateFormat('d').format(end) : DateFormat('MMM d').format(end);
+    final endFmt   = sameMonth ? DateFormat('d').format(displayEnd)
+                              : DateFormat('MMM d').format(displayEnd);
     return '$startFmt – $endFmt';
   }
 

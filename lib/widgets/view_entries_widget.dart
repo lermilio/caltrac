@@ -7,21 +7,51 @@ class ViewEntriesWidget extends StatefulWidget {
   const ViewEntriesWidget({super.key});
 
   @override
-  State<ViewEntriesWidget> createState() => _ViewEntriesWidgetState();
+  State<ViewEntriesWidget> createState() => ViewEntriesWidgetState();
 }
 
-class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
+class ViewEntriesWidgetState extends State<ViewEntriesWidget> {
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
   List<Map<String, dynamic>> _meals = [];
+  int? _extraCals;
   CalendarFormat _calendarFormat = CalendarFormat.week; // Default to week view
   final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2';
 
+  Future<void> reloadForDate(DateTime date) async {
+    setState(() {
+      _selectedDay = date;
+      _focusedDay = date;
+    });
+    await _fetchMealsForDate(date);
+    await _fetchCalsForDate(date);
+  }
 
   @override
   void initState() {
     super.initState();
     _fetchMealsForDate(_selectedDay);
+    _fetchCalsForDate(_selectedDay);
+  }
+
+   // Fetches extraCals from Firestore for the given date
+  Future<void> _fetchCalsForDate(DateTime date) async {
+    final dateKey = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+
+    final docRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('dailyLogs')
+        .doc(dateKey);
+
+    final doc = await docRef.get();
+
+    if (doc.exists) {
+      final num? ec = doc.data()?['extra_cals'] as num?;
+      setState(() => _extraCals = ec?.toInt());
+    } else {
+      setState(() => _extraCals = 0);
+    }
   }
 
   // Fetches meals from Firestore for the given date
@@ -62,7 +92,7 @@ class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
           .map((e) => Map<String, dynamic>.from(e as Map)),
     );
 
-    // your existing matcher
+    // Your existing matcher
     meals.removeWhere((meal) =>
         meal['input']   == mealToDelete['input']   &&
         (meal['calories'] ?? 0) == (mealToDelete['calories'] ?? 0) &&
@@ -70,7 +100,7 @@ class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
         (meal['carbs']    ?? 0) == (mealToDelete['carbs']    ?? 0) &&
         (meal['fat']      ?? 0) == (mealToDelete['fat']      ?? 0));
 
-    // 🔑 update the array AND decrement the rollups in ONE write
+    // Update the array AND decrement the rollups in ONE write
     await docRef.update({
       'meals': meals,
       'calories_in': FieldValue.increment(-_asInt(mealToDelete['calories'])),
@@ -133,14 +163,15 @@ class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
                 _focusedDay = focused;
               });
               _fetchMealsForDate(selected);
+              _fetchCalsForDate(selected);
             },
           ),
 
           const SizedBox(height: 12),
 
           // Show meals or placeholder text
-          if (_meals.isEmpty)
-            const Text("No meals logged for this date."),
+          if (_meals.isEmpty && (_extraCals == null || _extraCals == 0))
+            const Text("No entries logged for this date."),
 
           // Render meal cards
           ..._meals.map((meal) => Card(
@@ -156,6 +187,16 @@ class _ViewEntriesWidgetState extends State<ViewEntriesWidget> {
                   ),
                 ),
               )),
+          
+          // Render extra calorie cards
+          if (_extraCals != null && _extraCals != 0)
+            Card(
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              child: ListTile(
+                title: const Text('Extra Calories'),
+                subtitle: Text('$_extraCals kcal'),
+              ),
+            ),
         ],
       ),
     );

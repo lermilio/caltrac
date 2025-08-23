@@ -69,45 +69,68 @@ class _MonthlyProgressScreenState extends State<MonthlyProgressScreen> {
     super.initState();
     _range = TimeRange.month(DateTime.now());
     _generateDaysInMonth();
+
+    // Match Weekly: WHOOP first, then one summary fetch (no flicker)
     updateWhoopForMonth().then((_) {
-      _monthlySummaryFuture = fetchMonthlySummary(uid, _range, _daysInMonth);
-      setState(() {});
+      if (!mounted) return;
+      setState(() {
+        _monthlySummaryFuture = fetchMonthlySummary(uid, _range, _daysInMonth);
+      });
     });
   }
 
-  Future<void> updateWhoopCalsForDate(DateTime date, String uid) async {
-    final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('dailyLogs')
-        .doc(DateFormat('yyyy-MM-dd').format(date))
-        .get();
+    void _kickoffMonthLoad() {
+      // Fetch immediately → spinner once
+      setState(() {
+        _monthlySummaryFuture = fetchMonthlySummary(uid, _range, _daysInMonth);
+      });
 
-    final data = doc.data();
-    if (data != null && (data['whoop_cals'] ?? 0) > 0) {
-      // Data already exists, skip fetching
-      return;
+      // Run WHOOP in background; don't reassign the future (avoids second load)
+      updateWhoopForMonth().then((_) {
+        if (!mounted) return;
+        setState(() {}); // optional nudge; keeps content on screen
+      });
     }
 
-    // Otherwise, fetch from WHOOP
+  Future<bool> updateWhoopCalsForDate(DateTime date, String uid) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('users').doc(uid)
+        .collection('dailyLogs').doc(DateFormat('yyyy-MM-dd').format(date))
+        .get();
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final dayKey = DateTime(date.year, date.month, date.day);
+
+    final isToday = dayKey.isAtSameMomentAs(today);
+    final isYesterday = dayKey.isAtSameMomentAs(yesterday);
+
+    final data = snap.data();
+    if (data != null && (data['whoop_cals'] ?? 0) > 0 && !isToday && !isYesterday) {
+      // Data already exists AND this is older than yesterday → skip
+      print("WHOOP cals already present for $dayKey, skipping fetch.");
+      return false;
+    }
+
     final start = DateTime.utc(date.year, date.month, date.day);
     final end = start.add(const Duration(days: 1));
     try {
       final callable = FirebaseFunctions.instance.httpsCallable('fetchWhoopCalories');
-      await callable.call({
-        'start': start.toIso8601String(),
-        'end': end.toIso8601String(),
-        'userId': uid,
-      });
-    } catch (e) {
-      print("Error fetching WHOOP cals for $date: $e");
+      await callable.call({'start': start.toIso8601String(), 'end': end.toIso8601String(), 'userId': uid});
+      return true; // wrote new data
+    } catch (_) {
+      return false;
     }
   }
 
-  Future<void> updateWhoopForMonth() async {
+  Future<bool> updateWhoopForMonth() async {
+    var wrote = false;
     for (final day in _daysInMonth) {
-      await updateWhoopCalsForDate(day, uid);
+      final didWrite = await updateWhoopCalsForDate(day, uid);
+      if (didWrite) wrote = true;
     }
+    return wrote;
   }
 
   // Builds list of DateTime objects for each day in month up to today
@@ -123,11 +146,8 @@ class _MonthlyProgressScreenState extends State<MonthlyProgressScreen> {
     setState(() {
       _range = _range.nextMonth();
       _generateDaysInMonth();
-      updateWhoopForMonth().then((_) {
-        _monthlySummaryFuture = fetchMonthlySummary(uid, _range, _daysInMonth);
-        setState(() {});
-      });
     });
+    _kickoffMonthLoad();
   }
 
   // Navigate to previous month and reload data
@@ -135,11 +155,8 @@ class _MonthlyProgressScreenState extends State<MonthlyProgressScreen> {
     setState(() {
       _range = _range.previousMonth();
       _generateDaysInMonth();
-      updateWhoopForMonth().then((_) {
-        _monthlySummaryFuture = fetchMonthlySummary(uid, _range, _daysInMonth);
-        setState(() {});
-      });
     });
+    _kickoffMonthLoad();
   }
 
   String formatTrimmedMonth(TimeRange r) {
@@ -195,6 +212,7 @@ class _MonthlyProgressScreenState extends State<MonthlyProgressScreen> {
                   ),
                 ],
               ),
+
               const SizedBox(height: 24),
 
               // Data loader + display
