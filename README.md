@@ -7,7 +7,7 @@ This project demonstrates skills in **mobile app development, API integration, a
 
 ## 🛠️ Tech Stack
 - **Flutter** – cross-platform mobile development  
-- **Firebase** – authentication, Firestore, backend functions  
+- **Firebase** – Firestore Database, backend functions  
 - **WHOOP API** – pulls daily calories burned + workout data  
 - **OpenAI API** – parses natural language food/drink entries  
 - **GitHub** – version control, CI/CD ready  
