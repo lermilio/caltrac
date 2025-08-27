@@ -2,7 +2,7 @@
 
 CalTrac is a personal fitness and nutrition tracker built in **Flutter** with a **Firebase backend**.  
 It combines **manual food/drink logging** with **automated WHOOP API data** to help users track calories, macros, and weight over time.  
-This project demonstrates skills in **mobile app development, API integration, and backend architecture**.
+This project demonstrates skills in **mobile app development, API integration, and backend architecture**.                            
 Check out a short demo video: https://youtu.be/75LiN7F-GEs 
 
 
