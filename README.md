@@ -32,9 +32,9 @@ This project demonstrates skills in **mobile app development, API integration, a
 - Examples: “10 oz ground beef 93 percent lean” | “Burrito from chipotle with white rice, steak, cheese and guacamole” | “100 cals, 10g protien, 5g carbs, 3g fat".
 
 
-<img src="https://github.com/user-attachments/assets/7b955590-de83-4e22-b2e4-6b85fbf6a454" width="300"/>
-<img src="https://github.com/user-attachments/assets/5db24ad7-8fa9-4881-a7b8-8059604741b0" width="300"/>
-<img src="https://github.com/user-attachments/assets/5559a7fc-0a81-4c0d-9e6b-6171d011b38d" width="300"/>
+<img src="https://github.com/user-attachments/assets/7b955590-de83-4e22-b2e4-6b85fbf6a454" width="250"/>
+<img src="https://github.com/user-attachments/assets/5db24ad7-8fa9-4881-a7b8-8059604741b0" width="250"/>
+<img src="https://github.com/user-attachments/assets/5559a7fc-0a81-4c0d-9e6b-6171d011b38d" width="250"/>
 
 
 ## ⚖️ Weight Logging
@@ -43,16 +43,16 @@ This project demonstrates skills in **mobile app development, API integration, a
 - Delete entries at will.
 
 
-<img src="https://github.com/user-attachments/assets/4590c6e2-5540-4046-bde9-b61f676bd3d5" width="300"/>
-<img src="https://github.com/user-attachments/assets/9efa3cfd-2a44-43c6-8da8-b5cadd82ec62" width="300"/>
+<img src="https://github.com/user-attachments/assets/4590c6e2-5540-4046-bde9-b61f676bd3d5" width="250"/>
+<img src="https://github.com/user-attachments/assets/9efa3cfd-2a44-43c6-8da8-b5cadd82ec62" width="250"/>
 
 ## Summaries Updating for Logs
 
 - Demo of flow: User entering calories in and out, and summaries getting updated in real time.
 
 
-<img src="https://github.com/user-attachments/assets/bd6e6ccc-68d2-4fbe-9bd0-eeef5d4a5ef5" width="300"/>
-<img src="https://github.com/user-attachments/assets/1108974c-23b2-458f-9914-673f43f5e89b" width="300"/>
+<img src="https://github.com/user-attachments/assets/bd6e6ccc-68d2-4fbe-9bd0-eeef5d4a5ef5" width="250"/>
+<img src="https://github.com/user-attachments/assets/1108974c-23b2-458f-9914-673f43f5e89b" width="250"/>
 
 
 
