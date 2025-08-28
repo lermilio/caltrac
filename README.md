@@ -42,7 +42,7 @@
 ## ⚖️ Weight Logging
 
 - Enter weight and date, click add.
-- Delete entries at will.
+- Ability to view and delete entries at will.
 
 
 <img src="https://github.com/user-attachments/assets/4590c6e2-5540-4046-bde9-b61f676bd3d5" width="250"/>
