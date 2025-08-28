@@ -31,6 +31,7 @@
 - Choose between logging calories consumed or extra calories burned (to account for inaccurate whoop readings).
 - Entering Calories Consumed: Enter input (item or raw data), along with date -> AI parses natural language input -> Extracts Calories, Protein, Carbs, and Fats -> User confirms data, summary data updates.
 - Examples: “10 oz ground beef 93 percent lean” | “Burrito from chipotle with white rice, steak, cheese and guacamole” | “100 cals, 10g protein, 5g carbs, 3g fat".
+- Ability to view and delete entries for a specified date.
 
 
 <img src="https://github.com/user-attachments/assets/7b955590-de83-4e22-b2e4-6b85fbf6a454" width="250"/>
