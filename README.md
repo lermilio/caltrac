@@ -18,7 +18,7 @@
 
 - Users can view Daily, Weekly, and Monthly summaries.
 - Fetches live whoop data for current day on each load.
-- Ability to navigate to previous, days, weeks, and months. Days with no data will display adequate message. 
+- Ability to navigate to previous days, weeks, and months. Days with no data will display an adequate message. 
 
 
 <img src="https://github.com/user-attachments/assets/9cdfcf53-48ee-4ff1-bddf-1daf76e6a0d5" width="250"/>
