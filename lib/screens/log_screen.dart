@@ -93,7 +93,7 @@ class _LogScreenState extends State<LogScreen> {
       else if(_selectedOption == 'Enter Item') {
 
         // Validate and parse the input
-        final parsedData = await extractNutrition(rawItemInput);
+        final parsedData = await NutritionParser().parse(rawItemInput);
         print('Parsed Data from AI: $parsedData');
 
         final entryData = {
