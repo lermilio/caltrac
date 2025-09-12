@@ -19,9 +19,9 @@ class _MonthlyProgressScreenState extends State<MonthlyProgressScreen> {
 
   // Calculating summaries for the month.
   int monthlyNetCalories(Map<String, dynamic> data) => data['calories_in'] - data['calories_out'];  
-  int avgDailyProtein(Map<String, dynamic> data) => ((data['protein'] ?? 0) / _daysInMonth.length).round();    
-  int avgDailyCarbs(Map<String, dynamic> data) => ((data['carbs'] ?? 0) / _daysInMonth.length).round();  
-  int avgDailyFats(Map<String, dynamic> data) => ((data['fat'] ?? 0) / _daysInMonth.length).round();
+  int avgDailyProtein(Map<String, dynamic> data) => ((data['protein'] ?? 0) / _daysInMonth.length - 1).round();    
+  int avgDailyCarbs(Map<String, dynamic> data) => ((data['carbs'] ?? 0) / _daysInMonth.length - 1).round();  
+  int avgDailyFats(Map<String, dynamic> data) => ((data['fat'] ?? 0) / _daysInMonth.length - 1).round();
 
   // Fetches and aggregates daily data for the entire month from Firestore.
   Future<Map<String, dynamic>> fetchMonthlySummary(String userId, TimeRange dateRange, List<DateTime> days) async {

@@ -22,9 +22,10 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
     return all.where((d) => !d.isAfter(today)).toList();
   }
 
-  // Calculations for weekly totals and averages - today's date (could skew averages if in current week)
+  // Calculations for weekly totals and averages
   int _avgDenomFor(TimeRange r) {
-    final len = _daysForRange(r).length - 1; // exclude today
+    final len = _daysForRange(r).length;
+    print('len for $_range is $len');
     return len == 0 ? 1 : len;
   }
   int weeklyNetCalories(Map<String, dynamic> data) => data['calories_in'] - data['calories_out'];  
