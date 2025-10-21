@@ -242,8 +242,8 @@ class _MonthlyProgressScreenState extends State<MonthlyProgressScreen> {
                   return Column(
                     children: [
                       ProgressWidget(title: 'Monthly Caloric Net', data: monthlyNetCalories(data), unit: 'kcal'),
-                      ProgressWidget(title: 'Average Daily Protein', data: avgDailyProtein(data), unit: 'kcal'),
-                      ProgressWidget(title: 'Average Daily Carbs', data: avgDailyCarbs(data), unit: 'kcal'),
+                      ProgressWidget(title: 'Average Daily Protein', data: avgDailyProtein(data), unit: 'g'),
+                      ProgressWidget(title: 'Average Daily Carbs', data: avgDailyCarbs(data), unit: 'g'),
                       ProgressWidget(title: 'Average Daily Fats', data: avgDailyFats(data), unit: 'g'),
                     ],
                   );
