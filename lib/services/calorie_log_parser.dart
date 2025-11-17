@@ -1,4 +1,3 @@
-
 // File: lib/services/nutrition_parser.dart
 //
 // A production-ready nutrition parser that mirrors ChatGPT-style accuracy.
@@ -7,16 +6,15 @@
 // -----------
 // 1) Model settings tuned for deterministic, accurate extraction (temperature=0, seed).
 // 2) Strict JSON schema via function-calling to guarantee fields exist and are integers.
-// 3) Rule-based shortcuts for common brand items (e.g., Miller Lite) to bypass LLM when exact values are known.
-// 4) Quantity + unit parsing (e.g., "4x", "four", "12 oz", "2 tbsp") before the LLM call.
-// 5) Rock-solid JSON handling: prefers function_call.arguments, but also strips code fences if needed.
-// 6) Single entry point: NutritionParser.parse(String) -> Map<String,int> {calories, protein, carbs, fat}.
+// 3) Quantity + unit parsing (e.g., "4x", "four", "12 oz", "2 tbsp") before the LLM call.
+// 4) Rock-solid JSON handling: prefers function_call.arguments, but also strips code fences if needed.
+// 5) Single entry point: NutritionParser.parse(String) -> Map<String,int> {calories, protein, carbs, fat}.
 //
 // How to use
 // ----------
 // final parser = NutritionParser();
-// final result = await parser.parse("four miller lites");
-// => { "calories": 384, "protein": 0, "carbs": 13, "fat": 0 }
+// final result = await parser.parse("1 grilled chicken breast with 250g white rice");
+// => { "calories": 650, "protein": 45, "carbs": 60, "fat": 18 }
 //
 // Notes
 // -----
@@ -24,6 +22,7 @@
 // - If you prefer the Responses API w/ JSON schema, you can switch endpoints later.
 // - Keep your .env with OPENAI_API_KEY and ensure a full restart if you change this file
 //   in a background isolate/service (hot reload won't update isolates).
+//
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -32,10 +31,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class NutritionParser {
   // ---- Public API ----------------------------------------------------------
   Future<Map<String, int>> parse(String userInput) async {
-    // 0) Try rule-based brand shortcuts (fast, exact)
-    final shortcut = _alcoholShortcut(userInput);
-    if (shortcut != null) return shortcut;
-
     // 1) Build a function-call request to force structured JSON
     final apiKey = dotenv.env['OPENAI_API_KEY'];
     if (apiKey == null || apiKey.isEmpty) {
@@ -48,7 +43,7 @@ class NutritionParser {
     final functions = [
       {
         "name": "return_nutrition",
-        "description": "Return total macros for the described food/drink input.",
+        "description": "Return total macros for the described food or drink input.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -68,10 +63,9 @@ class NutritionParser {
         "role": "system",
         "content":
             "You are a nutrition parser. Extract TOTAL calories, protein (g), carbs (g), fat (g) from a single user entry. "
-            "Rules: return INTEGERS ONLY; if a value cannot be inferred, use 0; prefer brand-specific known values when a brand is named "
-            "(e.g., Miller Lite ≈ 96 kcal, 3.2 g carbs per 12 oz; Michelob Ultra ≈ 95 kcal, 2.6 g carbs per 12 oz; Bud Light ≈ 110 kcal, "
-            "6.6 g carbs per 12 oz; Coors Light ≈ 102 kcal, 5 g carbs per 12 oz). If item says 'light/lite', use light-beer macros. "
-            "Multiply by quantity (e.g., 'four beers' = 4 servings). Convert units when needed; round final macros to integers. "
+            "Rules: return INTEGERS ONLY; if a value cannot be inferred, use 0. "
+            "Use sensible, real-world estimates based on typical foods and drinks (e.g., restaurant meals, snacks, soft drinks, coffee drinks, protein shakes). "
+            "Multiply by quantity when the user gives counts, package sizes, or weights. "
             "Account for multiple items; do NOT ask clarifying questions—make a best reasonable estimate."
       },
       {"role": "user", "content": userInput}
@@ -117,60 +111,9 @@ class NutritionParser {
 
     // Rare fallback: content contains JSON (strip fences)
     final content = (msg?['content'] as String?) ?? '{}';
-    final cleaned = _stripCodeFences(content.trim());
-    final parsed = _safeParseJson(cleaned);
+    final stripped = _stripCodeFences(content);
+    final parsed = _safeParseJson(stripped);
     return _coerceIntNutrition(parsed);
-  }
-
-  // ---- Rule-based brand shortcuts -----------------------------------------
-  // Per 12 oz serving. Values mirror brand norms commonly cited on labels.
-  static const Map<String, Map<String, num>> _perServing = {
-    'miller lite': {'calories': 96, 'carbs': 3.2, 'protein': 0, 'fat': 0},
-    'bud light':   {'calories': 110, 'carbs': 6.6, 'protein': 1, 'fat': 0},
-    'michelob ultra': {'calories': 95, 'carbs': 2.6, 'protein': 0.6, 'fat': 0},
-    'coors light': {'calories': 102, 'carbs': 5.0, 'protein': 1.0, 'fat': 0},
-  };
-
-  static final RegExp _beerCountRe = RegExp(
-    r'(?:(\d+)\s*x\s*)?(one|two|three|four|five|six|seven|eight|nine|ten|\d+)?\s*'
-    r'(?:cans?|bottles?|beers?)?\s*(?:of\s+)?(miller lite|bud light|michelob ultra|coors light)\b',
-    caseSensitive: false,
-  );
-
-  Map<String, int>? _alcoholShortcut(String input) {
-    final m = _beerCountRe.firstMatch(input.toLowerCase());
-    if (m == null) return null;
-
-    final maybeMult = m.group(1);      // e.g., "4x"
-    final maybeCount = m.group(2);     // e.g., "four"
-    final brand = (m.group(3) ?? '').trim();
-
-    final count = (maybeMult != null && maybeMult.isNotEmpty)
-        ? int.tryParse(maybeMult) ?? 1
-        : (maybeCount != null ? _wordToInt(maybeCount) : 1);
-
-    final key = _perServing.keys.firstWhere(
-      (k) => brand.contains(k),
-      orElse: () => '',
-    );
-    if (key.isEmpty) return null;
-
-    final per = _perServing[key]!;
-    int toInt(num v) => v.round();
-    return {
-      'calories': toInt(per['calories']! * count),
-      'carbs':    toInt(per['carbs']! * count),
-      'protein':  toInt(per['protein']! * count),
-      'fat':      toInt(per['fat']! * count),
-    };
-  }
-
-  int _wordToInt(String w) {
-    const map = {
-      'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
-      'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
-    };
-    return map[w.toLowerCase()] ?? int.tryParse(w) ?? 1;
   }
 
   // ---- JSON helpers --------------------------------------------------------
