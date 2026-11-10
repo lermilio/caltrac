@@ -1,3 +1,4 @@
+import 'package:caltrac/widgets/refreshing_summary.dart';
 import 'package:caltrac/services/date_manager.dart';
 import 'package:caltrac/widgets/progress_widget.dart';
 import 'package:flutter/material.dart';
@@ -6,14 +7,22 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
 
 class WeeklyProgressScreen extends StatefulWidget {
-  const WeeklyProgressScreen({super.key});
+  const WeeklyProgressScreen({
+    super.key,
+    this.initialDate,
+    this.loadSummary,
+    this.refreshWhoop,
+  });
+  final DateTime? initialDate;
+  final Future<Map<String, dynamic>> Function(TimeRange)? loadSummary;
+  final Future<void> Function(TimeRange)? refreshWhoop;
 
   @override
   State<WeeklyProgressScreen> createState() => _WeeklyProgressScreenState();
 }
 
 class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
-  late TimeRange _range; 
+  late TimeRange _range;
 
   // keep all days if it's a past week; trim to today if it's the current week; (future weeks end up empty)
   List<DateTime> _daysForRange(TimeRange range) {
@@ -25,19 +34,25 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
   // Calculations for weekly totals and averages
   int _avgDenomFor(TimeRange r) {
     final len = _daysForRange(r).length;
-    print('len for $_range is $len');
     return len == 0 ? 1 : len;
   }
-  int weeklyNetCalories(Map<String, dynamic> data) => data['calories_in'] - data['calories_out'];  
-  int avgDailyProtein(Map<String, dynamic> data) => ((data['protein'] ?? 0) / _avgDenomFor(_range)).round();    
-  int avgDailyCarbs(Map<String, dynamic> data) => ((data['carbs'] ?? 0) / _avgDenomFor(_range)).round();  
-  int avgDailyFats(Map<String, dynamic> data) => ((data['fat'] ?? 0) / _avgDenomFor(_range)).round();  
 
-  final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2'; 
-  Future<Map<String, dynamic>>? _weeklySummaryFuture; // Weekly summary data
+  int weeklyNetCalories(Map<String, dynamic> data) =>
+      data['calories_in'] - data['calories_out'];
+  int avgDailyProtein(Map<String, dynamic> data) =>
+      ((data['protein'] ?? 0) / _avgDenomFor(_range)).round();
+  int avgDailyCarbs(Map<String, dynamic> data) =>
+      ((data['carbs'] ?? 0) / _avgDenomFor(_range)).round();
+  int avgDailyFats(Map<String, dynamic> data) =>
+      ((data['fat'] ?? 0) / _avgDenomFor(_range)).round();
+
+  final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2';
 
   // Fetch and sum up daily log data from Firestore
-  Future<Map<String, dynamic>> fetchWeeklySummary(String userId, TimeRange dateRange) async {
+  Future<Map<String, dynamic>> fetchWeeklySummary(
+    String userId,
+    TimeRange dateRange,
+  ) async {
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
     int totalCalsIn = 0;
     int totalCalsOut = 0;
@@ -45,18 +60,21 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
     int totalProtein = 0;
     int totalCarbs = 0;
 
-    for (final date in _daysForRange(dateRange)) {      
-    final doc = firestore.collection('users').doc(userId)
-      .collection('dailyLogs').doc(DateFormat('yyyy-MM-dd').format(date));
-    final docSnap = await doc.get();
-    if (!docSnap.exists) continue;
+    for (final date in _daysForRange(dateRange)) {
+      final doc = firestore
+          .collection('users')
+          .doc(userId)
+          .collection('dailyLogs')
+          .doc(DateFormat('yyyy-MM-dd').format(date));
+      final docSnap = await doc.get();
+      if (!docSnap.exists) continue;
       final data = docSnap.data();
       if (data != null) {
         totalCalsIn += (data['calories_in'] ?? 0) as int;
-        totalCarbs  += (data['carbs']       ?? 0) as int;
-        totalFats   += (data['fat']         ?? 0) as int;
-        totalProtein+= (data['protein']     ?? 0) as int;
-        totalCalsOut+= (data['calories_out']?? 0) as int;
+        totalCarbs += (data['carbs'] ?? 0) as int;
+        totalFats += (data['fat'] ?? 0) as int;
+        totalProtein += (data['protein'] ?? 0) as int;
+        totalCalsOut += (data['calories_out'] ?? 0) as int;
       }
     }
 
@@ -87,88 +105,75 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
     final isToday = dayKey.isAtSameMomentAs(today);
     final isYesterday = dayKey.isAtSameMomentAs(yesterday);
 
-    if (data != null && (data['whoop_cals'] ?? 0) > 0 && !isToday && !isYesterday) {
+    if (data != null &&
+        (data['whoop_cals'] ?? 0) > 0 &&
+        !isToday &&
+        !isYesterday) {
       // Data exists and the day is not today or yesterday → skip fetching
-      print("WHOOP cals already present for $date, skipping fetch.");
       return;
     }
-    
+
     // Otherwise, fetch from WHOOP
     final start = DateTime.utc(date.year, date.month, date.day);
     final end = start.add(const Duration(days: 1));
-    try {
-      final callable = FirebaseFunctions.instance.httpsCallable('fetchWhoopCalories');
-      await callable.call({
-        'start': start.toIso8601String(),
-        'end': end.toIso8601String(),
-        'userId': uid,
-      });
-    } catch (e) {
-      print("Error fetching WHOOP cals for $date: $e");
-    }
+    final callable = FirebaseFunctions.instance.httpsCallable(
+      'fetchWhoopCalories',
+    );
+    await callable.call({
+      'start': start.toIso8601String(),
+      'end': end.toIso8601String(),
+      'userId': uid,
+    });
   }
 
   Future<void> updateWhoopForRange(TimeRange range) async {
+    var failed = false;
     for (final day in _daysForRange(range)) {
-      await updateWhoopCalsForDate(day, uid);
+      try {
+        await updateWhoopCalsForDate(day, uid);
+      } catch (_) {
+        failed = true;
+      }
     }
+    if (failed) throw StateError('Some WHOOP days could not be refreshed.');
   }
 
   @override
   void initState() {
     super.initState();
-    _range = TimeRange.week(DateTime.now());
-    // kick WHOOP updates, then fetch summary
-    updateWhoopForRange(_range).then((_) {
-      setState(() {
-        _weeklySummaryFuture = fetchWeeklySummary(uid, _range);
-      });
-    });
+    _range = TimeRange.week(widget.initialDate ?? DateTime.now());
   }
 
-  // Navigate to next week, updating the range and fetching new data
-  void goToNextWeek() {
-    setState(() {
-      _range = _range.nextWeek();
-      _weeklySummaryFuture = fetchWeeklySummary(uid, _range);
-    });
-    updateWhoopForRange(_range).then((_) {
-      if (mounted) setState(() {}); // optional nudge
-    });
-  }
+  void goToNextWeek() => setState(() => _range = _range.nextWeek());
 
-  // Navigate to the previous week, update
-  void goToPreviousWeek() {
-    setState(() {
-      _range = _range.previousWeek();
-      _weeklySummaryFuture = fetchWeeklySummary(uid, _range);
-    });
-    updateWhoopForRange(_range).then((_) {
-      if (mounted) setState(() {});
-    });
-  }
+  void goToPreviousWeek() => setState(() => _range = _range.previousWeek());
 
   String formatTrimmedWeek(TimeRange r) {
     final today = DateTime.now();
     final start = r.start;
     final end = r.end;
 
-    final isFutureWeek = start.isAfter(DateTime(today.year, today.month, today.day));
+    final isFutureWeek = start.isAfter(
+      DateTime(today.year, today.month, today.day),
+    );
     final isCurrentWeek = !isFutureWeek && end.isAfter(today);
 
     final displayEnd = isCurrentWeek
-        ? DateTime(today.year, today.month, today.day)  // trim only current week
-        : end;                                          // full range for past/future
+        ? DateTime(today.year, today.month, today.day) // trim only current week
+        : end; // full range for past/future
 
-    final sameMonth = start.month == displayEnd.month && start.year == displayEnd.year;
+    final sameMonth =
+        start.month == displayEnd.month && start.year == displayEnd.year;
     final startFmt = DateFormat('MMM d').format(start);
-    final endFmt   = sameMonth ? DateFormat('d').format(displayEnd)
-                              : DateFormat('MMM d').format(displayEnd);
+    final endFmt = sameMonth
+        ? DateFormat('d').format(displayEnd)
+        : DateFormat('MMM d').format(displayEnd);
     return '$startFmt – $endFmt';
   }
 
   @override
   Widget build(BuildContext context) {
+    final range = _range;
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: SingleChildScrollView(
@@ -187,7 +192,10 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
                   const SizedBox(width: 10),
                   Text(
                     formatTrimmedWeek(_range),
-                    style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                      fontSize: 25,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const SizedBox(width: 10),
                   FloatingActionButton.small(
@@ -199,24 +207,15 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
               ),
 
               // Load and display weekly summary
-              FutureBuilder<Map<String, dynamic>>(
-                future: _weeklySummaryFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const CircularProgressIndicator();
-                  }
-
-                  if (snapshot.hasError) {
-                    return Text('Error: ${snapshot.error}');
-                  }
-
-                  if (!snapshot.hasData || snapshot.data == null) {
-                    // Still waiting for data to be written to Firestore, show loading
-                    return const CircularProgressIndicator();
-                  }
-
-                  // Optionally, check if all values are zero and then show "No data" message
-                  final data = snapshot.data!;
+              RefreshingSummary(
+                period: range.start,
+                loadSummary: () =>
+                    widget.loadSummary?.call(range) ??
+                    fetchWeeklySummary(uid, range),
+                refreshWhoop: () =>
+                    widget.refreshWhoop?.call(range) ??
+                    updateWhoopForRange(range),
+                builder: (data) {
                   final allZero = data.values.every((v) => v == 0);
                   if (allZero) {
                     return const Text('No data available for this week.');
@@ -224,10 +223,26 @@ class _WeeklyProgressScreenState extends State<WeeklyProgressScreen> {
 
                   return Column(
                     children: [
-                      ProgressWidget(title: 'Week Caloric Net', data: weeklyNetCalories(data), unit: 'kcal'),
-                      ProgressWidget(title: 'Average Daily Protein', data: avgDailyProtein(data), unit: 'g'),
-                      ProgressWidget(title: 'Average Daily Carbs', data: avgDailyCarbs(data), unit: 'g'),
-                      ProgressWidget(title: 'Average Daily Fats', data: avgDailyFats(data), unit: 'g'),
+                      ProgressWidget(
+                        title: 'Week Caloric Net',
+                        data: weeklyNetCalories(data),
+                        unit: 'kcal',
+                      ),
+                      ProgressWidget(
+                        title: 'Average Daily Protein',
+                        data: avgDailyProtein(data),
+                        unit: 'g',
+                      ),
+                      ProgressWidget(
+                        title: 'Average Daily Carbs',
+                        data: avgDailyCarbs(data),
+                        unit: 'g',
+                      ),
+                      ProgressWidget(
+                        title: 'Average Daily Fats',
+                        data: avgDailyFats(data),
+                        unit: 'g',
+                      ),
                     ],
                   );
                 },
