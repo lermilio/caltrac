@@ -3,31 +3,33 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:flutter/material.dart'; 
-
+import 'package:caltrac/widgets/refreshing_summary.dart';
 
 // DailyProgressScreen shows daily nutritional summary with navigation between days
-class DailyProgressScreen extends StatefulWidget{ 
+class DailyProgressScreen extends StatefulWidget {
   const DailyProgressScreen({
-    super.key, 
+    super.key,
+    this.initialDate,
+    this.loadSummary,
+    this.refreshWhoop,
   });
+  final DateTime? initialDate;
+  final Future<Map<String, dynamic>> Function(DateTime)? loadSummary;
+  final Future<void> Function(DateTime)? refreshWhoop;
   @override
   State<DailyProgressScreen> createState() => _DailyProgressScreenState();
 }
 
 class _DailyProgressScreenState extends State<DailyProgressScreen> {
-
-  int netCalories(Map<String, dynamic> data) => data['calories_in'] - data['calories_out'];  
+  int netCalories(Map<String, dynamic> data) =>
+      data['calories_in'] - data['calories_out'];
   late DateTime _currentDate;
   final uid = 'e2aPNbtabDSQZVcoRyCIS549reh2';
-  Future<Map<String, dynamic>>? _summaryFuture;  // Holds the result of fetching a single day’s nutrition data from Firestore.
 
   // Navigate to next day
   void goToNextDay() {
     setState(() {
       _currentDate = _currentDate.add(Duration(days: 1));
-      updateWhoopCals(_currentDate);
-      _summaryFuture = fetchDailySummary(uid, _currentDate);
     });
   }
 
@@ -35,8 +37,6 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
   void goToPreviousDay() {
     setState(() {
       _currentDate = _currentDate.subtract(Duration(days: 1));
-      updateWhoopCals(_currentDate);
-      _summaryFuture = fetchDailySummary(uid, _currentDate);
     });
   }
 
@@ -54,7 +54,7 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
         .get();
 
     final data = doc.data();
-    
+
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
@@ -63,63 +63,48 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
     final isToday = DateUtils.isSameDay(date, DateTime.now());
     final isYesterday = dayKey.isAtSameMomentAs(yesterday);
 
-    if (data != null && (data['whoop_cals'] ?? 0) > 0 && !isToday && !isYesterday) {
+    if (data != null &&
+        (data['whoop_cals'] ?? 0) > 0 &&
+        !isToday &&
+        !isYesterday) {
       // Data exists and the day is NOT today or yesterday (in case we log on after midnight),
       // so skip fetching
-      print("Skipping fetch for $dayKey (already have whoop_cals=${
-          data['whoop_cals']
-      })");
       return;
     }
-    
 
     // Fetch from WHOOP
     final start = DateTime.utc(date.year, date.month, date.day);
     final end = start.add(const Duration(days: 1));
 
-    print("Sending WHOOP request:");
-    print("start: $start");
-    print("end: $end");
-
-    try {
-      final callable = FirebaseFunctions.instance.httpsCallable('fetchWhoopCalories');
-      final res = await callable.call({
-        'start': start.toIso8601String(),
-        'end': end.toIso8601String(),
-        'userId': uid,
-      });
-
-      final data = Map<String, dynamic>.from(res.data as Map);
-      final whoopCals = (data['whoop_cals'] ?? 0) as int;
-      final caloriesOut = (data['calories_out'] ?? 0) as int;
-
-      print("WHOOP cals updated: whoop=$whoopCals, out=$caloriesOut");
-    } catch (e) {
-      print("Error fetching WHOOP cals: $e");
-    }
-  }
-
-  // Initialize state and fetch initial data
-   @override
-  void initState() {
-    _currentDate = DateTime.now();
-    super.initState();
-    updateWhoopCals(_currentDate).then((_) {
-      _summaryFuture = fetchDailySummary(uid, _currentDate);
-      setState(() {});
+    final callable = FirebaseFunctions.instance.httpsCallable(
+      'fetchWhoopCalories',
+    );
+    await callable.call({
+      'start': start.toIso8601String(),
+      'end': end.toIso8601String(),
+      'userId': uid,
     });
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _currentDate = widget.initialDate ?? DateTime.now();
+  }
+
   // Fetch daily summary data from Firestore
-  Future<Map<String, dynamic>> fetchDailySummary(String userId, DateTime date) async {
+  Future<Map<String, dynamic>> fetchDailySummary(
+    String userId,
+    DateTime date,
+  ) async {
     final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
     final doc = await firestore
-      .collection('users')
-      .doc(userId)
-      .collection('dailyLogs')
-      .doc(DateFormat('yyyy-MM-dd').format(date))
-      .get();
+        .collection('users')
+        .doc(userId)
+        .collection('dailyLogs')
+        .doc(DateFormat('yyyy-MM-dd').format(date))
+        .get();
 
     // Return default values if no document exists
     if (!doc.exists) {
@@ -145,6 +130,7 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final date = _currentDate;
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: SingleChildScrollView(
@@ -157,54 +143,33 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
                   FloatingActionButton.small(
                     onPressed: goToPreviousDay,
                     backgroundColor: Colors.white,
-                    child: Icon(
-                      Icons.arrow_back,
-                      color: Colors.black
-                    )
+                    child: Icon(Icons.arrow_back, color: Colors.black),
                   ),
-                  SizedBox( width: 10,),
+                  SizedBox(width: 10),
                   Text(
                     formattedDate,
-                    style: TextStyle(
-                      fontSize: 25,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: TextStyle(fontSize: 25, fontWeight: FontWeight.w500),
                   ),
-                  SizedBox( width: 10,),
+                  SizedBox(width: 10),
                   FloatingActionButton.small(
                     onPressed: goToNextDay,
                     backgroundColor: Colors.white,
-                    child: Icon(
-                      Icons.arrow_forward,
-                      color: Colors.black
-                    )
+                    child: Icon(Icons.arrow_forward, color: Colors.black),
                   ),
                 ],
               ),
               SizedBox(height: 24),
-              // 
-              FutureBuilder<Map<String, dynamic>>(
-                future: _summaryFuture,
-                builder: (context, snapshot) {
-
-                  // Handle loading, error, and data states
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const CircularProgressIndicator();
-                  }
-
-                  if (snapshot.hasError) {
-                    return Text('Error: ${snapshot.error}');
-                  }
-
-                  if (!snapshot.hasData || snapshot.data == null) {
-                    // Still waiting for data to be written to Firestore, show loading
-                    return const CircularProgressIndicator();
-                  }
-
-                  
-                  // Extract data from snapshot
-                  final data = snapshot.data!;
-                  final netCals = (data['calories_in'] ?? 0) - (data['calories_out'] ?? 0);
+              //
+              RefreshingSummary(
+                period: date,
+                loadSummary: () =>
+                    widget.loadSummary?.call(date) ??
+                    fetchDailySummary(uid, date),
+                refreshWhoop: () =>
+                    widget.refreshWhoop?.call(date) ?? updateWhoopCals(date),
+                builder: (data) {
+                  final netCals =
+                      (data['calories_in'] ?? 0) - (data['calories_out'] ?? 0);
 
                   final allZero = data.values.every((v) => v == 0);
                   if (allZero) {
@@ -214,12 +179,36 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
                   // Build the progress widgets with the fetched data
                   return Column(
                     children: [
-                      ProgressWidget(title: 'Calories In', data: data['calories_in'] ?? 0, unit: 'kcal'),
-                      ProgressWidget(title: 'Calories Out', data: data['calories_out'] ?? 0, unit: 'kcal'),
-                      ProgressWidget(title: 'Net Calories', data: netCals, unit: 'kcal'),
-                      ProgressWidget(title: 'Protein', data: data['protein'] ?? 0, unit: 'g'),
-                      ProgressWidget(title: 'Carbs', data: data['carbs'] ?? 0, unit: 'g'),
-                      ProgressWidget(title: 'Fats', data: data['fat'] ?? 0, unit: 'g'),
+                      ProgressWidget(
+                        title: 'Calories In',
+                        data: data['calories_in'] ?? 0,
+                        unit: 'kcal',
+                      ),
+                      ProgressWidget(
+                        title: 'Calories Out',
+                        data: data['calories_out'] ?? 0,
+                        unit: 'kcal',
+                      ),
+                      ProgressWidget(
+                        title: 'Net Calories',
+                        data: netCals,
+                        unit: 'kcal',
+                      ),
+                      ProgressWidget(
+                        title: 'Protein',
+                        data: data['protein'] ?? 0,
+                        unit: 'g',
+                      ),
+                      ProgressWidget(
+                        title: 'Carbs',
+                        data: data['carbs'] ?? 0,
+                        unit: 'g',
+                      ),
+                      ProgressWidget(
+                        title: 'Fats',
+                        data: data['fat'] ?? 0,
+                        unit: 'g',
+                      ),
                     ],
                   );
                 },
@@ -227,7 +216,7 @@ class _DailyProgressScreenState extends State<DailyProgressScreen> {
             ],
           ),
         ),
-      )
+      ),
     );
   }
 }
