@@ -1,37 +1,26 @@
-// File: lib/services/nutrition_parser.dart
-//
-// A production-ready nutrition parser that mirrors ChatGPT-style accuracy.
-//
-// Key features
-// -----------
-// 1) Model settings tuned for deterministic, accurate extraction (temperature=0, seed).
-// 2) Strict JSON schema via function-calling to guarantee fields exist and are integers.
-// 3) Quantity + unit parsing (e.g., "4x", "four", "12 oz", "2 tbsp") before the LLM call.
-// 4) Rock-solid JSON handling: prefers function_call.arguments, but also strips code fences if needed.
-// 5) Single entry point: NutritionParser.parse(String) -> Map<String,int> {calories, protein, carbs, fat}.
-//
-// How to use
-// ----------
-// final parser = NutritionParser();
-// final result = await parser.parse("1 grilled chicken breast with 250g white rice");
-// => { "calories": 650, "protein": 45, "carbs": 60, "fat": 18 }
-//
-// Notes
-// -----
-// - Uses OpenAI Chat Completions w/ function-calling (compatible with 4o/4.1 models).
-// - If you prefer the Responses API w/ JSON schema, you can switch endpoints later.
-// - Keep your .env with OPENAI_API_KEY and ensure a full restart if you change this file
-//   in a background isolate/service (hot reload won't update isolates).
-//
+// Requests nutrition estimates, validates their shape and numeric values, and
+// returns whole-number calories and macros. Validation does not prove accuracy.
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+class NutritionParseException implements Exception {
+  const NutritionParseException();
+
+  @override
+  String toString() => 'Could not read nutrition data. Please try again.';
+}
+
 class NutritionParser {
+  NutritionParser({http.Client? client}) : _client = client;
+
+  // A supplied client belongs to the caller. Otherwise each request owns its client.
+  final http.Client? _client;
+
   // ---- Public API ----------------------------------------------------------
   Future<Map<String, int>> parse(String userInput) async {
-    // 1) Build a function-call request to force structured JSON
+    // Request structured JSON; the response still needs local validation.
     final apiKey = dotenv.env['OPENAI_API_KEY'];
     if (apiKey == null || apiKey.isEmpty) {
       throw Exception('Missing OPENAI_API_KEY in .env');
@@ -39,23 +28,27 @@ class NutritionParser {
 
     final url = Uri.parse('https://api.openai.com/v1/chat/completions');
 
-    // Define strict schema as a "function"
+    // Describe the expected nutrition fields as a function.
     final functions = [
       {
         "name": "return_nutrition",
-        "description": "Return total macros for the described food or drink input.",
+        "description":
+            "Return total macros for the described food or drink input.",
         "parameters": {
           "type": "object",
           "properties": {
-            "calories": {"type": "integer", "description": "Total calories >= 0"},
-            "protein":  {"type": "integer", "description": "Protein grams >= 0"},
-            "carbs":    {"type": "integer", "description": "Carb grams >= 0"},
-            "fat":      {"type": "integer", "description": "Fat grams >= 0"}
+            "calories": {
+              "type": "integer",
+              "description": "Total calories >= 0",
+            },
+            "protein": {"type": "integer", "description": "Protein grams >= 0"},
+            "carbs": {"type": "integer", "description": "Carb grams >= 0"},
+            "fat": {"type": "integer", "description": "Fat grams >= 0"},
           },
           "required": ["calories", "protein", "carbs", "fat"],
-          "additionalProperties": false
-        }
-      }
+          "additionalProperties": false,
+        },
+      },
     ];
 
     final messages = [
@@ -66,9 +59,9 @@ class NutritionParser {
             "Rules: return INTEGERS ONLY; if a value cannot be inferred, use 0. "
             "Use sensible, real-world estimates based on typical foods and drinks (e.g., restaurant meals, snacks, soft drinks, coffee drinks, protein shakes). "
             "Multiply by quantity when the user gives counts, package sizes, or weights. "
-            "Account for multiple items; do NOT ask clarifying questions—make a best reasonable estimate."
+            "Account for multiple items; do NOT ask clarifying questions—make a best reasonable estimate.",
       },
-      {"role": "user", "content": userInput}
+      {"role": "user", "content": userInput},
     ];
 
     final body = {
@@ -78,46 +71,61 @@ class NutritionParser {
       "messages": messages,
       "functions": functions,
       "function_call": {"name": "return_nutrition"},
-      "max_tokens": 200
+      "max_tokens": 200,
     };
 
-    final response = await http.post(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $apiKey',
-      },
-      body: jsonEncode(body),
-    );
+    final client = _client ?? http.Client();
+    late http.Response response;
+    try {
+      response = await client.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $apiKey',
+        },
+        body: jsonEncode(body),
+      );
+    } finally {
+      if (_client == null) client.close();
+    }
 
     if (response.statusCode != 200) {
-      throw Exception('OpenAI error: ${response.body}');
+      throw Exception(
+        'Nutrition service request failed (${response.statusCode}). Please try again.',
+      );
     }
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final choices = (data['choices'] as List?) ?? const [];
-    if (choices.isEmpty) {
-      throw Exception('Empty choices from OpenAI.');
+    final data = _decodeObject(response.body);
+    final choices = data['choices'];
+    if (choices is! List || choices.isEmpty || choices.first is! Map) {
+      throw const NutritionParseException();
     }
-    final msg = choices.first['message'] as Map<String, dynamic>?;
+    final choice = choices.first as Map;
+    final msg = choice['message'];
+    if (msg is! Map || choice['finish_reason'] == 'length') {
+      throw const NutritionParseException();
+    }
 
     // Preferred path: function_call.arguments is a JSON string
-    if (msg != null && msg['function_call'] != null) {
+    if (msg['function_call'] != null) {
       final fnCall = msg['function_call'];
-      final argsStr = (fnCall['arguments'] as String?) ?? '{}';
-      final parsed = _safeParseJson(argsStr);
-      return _coerceIntNutrition(parsed);
+      if (fnCall is! Map ||
+          fnCall['name'] != 'return_nutrition' ||
+          fnCall['arguments'] is! String) {
+        throw const NutritionParseException();
+      }
+      return _validateNutrition(_decodeObject(fnCall['arguments'] as String));
     }
 
     // Rare fallback: content contains JSON (strip fences)
-    final content = (msg?['content'] as String?) ?? '{}';
-    final stripped = _stripCodeFences(content);
-    final parsed = _safeParseJson(stripped);
-    return _coerceIntNutrition(parsed);
+    final content = msg['content'];
+    if (content is! String) throw const NutritionParseException();
+    return _validateNutrition(_decodeObject(_stripCodeFences(content)));
   }
 
   // ---- JSON helpers --------------------------------------------------------
   String _stripCodeFences(String s) {
+    s = s.trim();
     if (!s.trimLeft().startsWith('```')) return s;
     final lines = s.split('\n');
     if (lines.isNotEmpty && lines.first.trim().startsWith('```')) {
@@ -129,37 +137,25 @@ class NutritionParser {
     return lines.join('\n').trim();
   }
 
-  Map<String, dynamic> _safeParseJson(String s) {
+  Map<String, dynamic> _decodeObject(String s) {
     try {
-      final v = jsonDecode(s);
-      if (v is Map) {
-        return Map<String, dynamic>.from(v);
-      }
-      return <String, dynamic>{};
-    } catch (_) {
-      return <String, dynamic>{};
+      final value = jsonDecode(s);
+      if (value is Map<String, dynamic>) return value;
+    } on FormatException {
+      throw const NutritionParseException();
     }
+    throw const NutritionParseException();
   }
 
-  Map<String, int> _coerceIntNutrition(Map<String, dynamic> m) {
-    int toInt(dynamic v) {
-      if (v == null) return 0;
-      if (v is int) return v < 0 ? 0 : v;
-      if (v is double) return v < 0 ? 0 : v.round();
-      if (v is num) return v < 0 ? 0 : v.round();
-      if (v is String) {
-        final n = num.tryParse(v.replaceAll(RegExp(r'[^0-9\.-]'), ''));
-        if (n == null) return 0;
-        return n < 0 ? 0 : n.round();
+  Map<String, int> _validateNutrition(Map<String, dynamic> values) {
+    final nutrition = <String, int>{};
+    for (final field in ['calories', 'protein', 'carbs', 'fat']) {
+      final value = values[field];
+      if (value is! num || !value.isFinite || value < 0) {
+        throw const NutritionParseException();
       }
-      return 0;
+      nutrition[field] = value.round();
     }
-
-    return {
-      'calories': toInt(m['calories']),
-      'protein':  toInt(m['protein']),
-      'carbs':    toInt(m['carbs']),
-      'fat':      toInt(m['fat']),
-    };
+    return nutrition;
   }
 }
