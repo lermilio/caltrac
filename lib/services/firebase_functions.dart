@@ -6,22 +6,21 @@ Future<void> logEntryToFirebase({
   required String userId,
   required DateTime date,
   required Map entryData,
+  FirebaseFunctions? functions,
 }) async {
   final String dateStr =
       "${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
 
-  final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('addEntryLog');
+  final callable = (functions ?? FirebaseFunctions.instance).httpsCallable(
+    'addEntryLog',
+  );
 
-  try {
-    await callable.call({
-      'userId': userId,
-      'dateString': dateStr,
-      'entryData': entryData,
-    });
-    print('Entry logged!');
-  } catch (e) {
-    print('Error: $e');
-  }
+  // Let the caller handle failures; completion means the save succeeded.
+  await callable.call({
+    'userId': userId,
+    'dateString': dateStr,
+    'entryData': entryData,
+  });
 }
 
 // Adds or updates extra calories burned for a given date.
@@ -76,7 +75,9 @@ Future<void> logWeightToFirebase({
   final String dateStr =
       "${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
 
-  final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('addWeightLog');
+  final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable(
+    'addWeightLog',
+  );
 
   await callable.call({
     'userId': userId,
