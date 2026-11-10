@@ -1,6 +1,7 @@
 import 'package:caltrac/widgets/progress_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:caltrac/services/date_manager.dart';
+import 'package:caltrac/services/summary_calculations.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
@@ -19,9 +20,18 @@ class _MonthlyProgressScreenState extends State<MonthlyProgressScreen> {
 
   // Calculating summaries for the month.
   int monthlyNetCalories(Map<String, dynamic> data) => data['calories_in'] - data['calories_out'];  
-  int avgDailyProtein(Map<String, dynamic> data) => ((data['protein'] ?? 0) / _daysInMonth.length - 1).round();    
-  int avgDailyCarbs(Map<String, dynamic> data) => ((data['carbs'] ?? 0) / _daysInMonth.length - 1).round();  
-  int avgDailyFats(Map<String, dynamic> data) => ((data['fat'] ?? 0) / _daysInMonth.length - 1).round();
+  int avgDailyProtein(Map<String, dynamic> data) => averagePerDay(
+    total: data['protein'] ?? 0,
+    dayCount: _daysInMonth.length,
+  );
+  int avgDailyCarbs(Map<String, dynamic> data) => averagePerDay(
+    total: data['carbs'] ?? 0,
+    dayCount: _daysInMonth.length,
+  );
+  int avgDailyFats(Map<String, dynamic> data) => averagePerDay(
+    total: data['fat'] ?? 0,
+    dayCount: _daysInMonth.length,
+  );
 
   // Fetches and aggregates daily data for the entire month from Firestore.
   Future<Map<String, dynamic>> fetchMonthlySummary(String userId, TimeRange dateRange, List<DateTime> days) async {

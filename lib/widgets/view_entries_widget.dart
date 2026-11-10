@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:caltrac/services/food_entry_deletion.dart';
 
 // Widget for viewing and deleting logged meal entries by date
 class ViewEntriesWidget extends StatefulWidget {
@@ -74,9 +75,8 @@ class ViewEntriesWidgetState extends State<ViewEntriesWidget> {
     }
   }
 
-  int _asInt(dynamic v) => v is int ? v : (v is num ? v.round() : 0);
-
   Future<void> _deleteMealFromFirebase(Map<String, dynamic> mealToDelete) async {
+    final selectedDate = _selectedDay;
     final dateKey =
         "${_selectedDay.year}-${_selectedDay.month.toString().padLeft(2, '0')}-${_selectedDay.day.toString().padLeft(2, '0')}";
 
@@ -84,35 +84,28 @@ class ViewEntriesWidgetState extends State<ViewEntriesWidget> {
         .collection('users').doc(uid)
         .collection('dailyLogs').doc(dateKey);
 
-    final snap = await docRef.get();
-    if (!snap.exists) return;
+    try {
+      final update = await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final snapshot = await transaction.get(docRef);
+        if (!snapshot.exists) return null;
+        final update = foodEntryDeletionUpdate(snapshot.data()!, mealToDelete);
+        if (update != null) transaction.update(docRef, update);
+        return update;
+      });
+      if (!mounted || update == null) return;
 
-    final meals = List<Map<String, dynamic>>.from(
-      (snap.data()?['meals'] as List? ?? const [])
-          .map((e) => Map<String, dynamic>.from(e as Map)),
-    );
-
-    // Your existing matcher
-    meals.removeWhere((meal) =>
-        meal['input']   == mealToDelete['input']   &&
-        (meal['calories'] ?? 0) == (mealToDelete['calories'] ?? 0) &&
-        (meal['protein']  ?? 0) == (mealToDelete['protein']  ?? 0) &&
-        (meal['carbs']    ?? 0) == (mealToDelete['carbs']    ?? 0) &&
-        (meal['fat']      ?? 0) == (mealToDelete['fat']      ?? 0));
-
-    // Update the array AND decrement the rollups in ONE write
-    await docRef.update({
-      'meals': meals,
-      'calories_in': FieldValue.increment(-_asInt(mealToDelete['calories'])),
-      'carbs':       FieldValue.increment(-_asInt(mealToDelete['carbs'])),
-      'fat':         FieldValue.increment(-_asInt(mealToDelete['fat'])),
-      'protein':     FieldValue.increment(-_asInt(mealToDelete['protein'])),
-    });
-
-    setState(() => _meals = meals);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Entry deleted')),
-    );
+      if (isSameDay(_selectedDay, selectedDate)) {
+        setState(() => _meals = List<Map<String, dynamic>>.from(update['meals']));
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Entry deleted')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting entry: $error')),
+      );
+    }
   }
 
   // Shows confirmation dialog before deleting a meal
